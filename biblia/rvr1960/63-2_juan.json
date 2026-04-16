@@ -1,0 +1,203 @@
+{
+  "book_usfm": "2JN",
+  "name": "2 Juan",
+  "chapters": [
+    {
+      "chapter_usfm": "2JN.INTRO1",
+      "is_chapter": false,
+      "previous": {
+        "usfm": "1JN.5",
+        "human": "1 Juan 5",
+        "canonical": true,
+        "toc": true
+      },
+      "current": {
+        "usfm": "2JN.INTRO1",
+        "human": "2 Juan SEGUNDA EPÍSTOLA DE SAN JUAN APÓSTOL"
+      },
+      "next": {
+        "usfm": "2JN.1",
+        "human": "2 Juan 1",
+        "canonical": true,
+        "toc": true
+      },
+      "items": []
+    },
+    {
+      "chapter_usfm": "2JN.1",
+      "is_chapter": true,
+      "previous": {
+        "usfm": "2JN.INTRO1",
+        "human": "2 Juan SEGUNDA EPÍSTOLA DE SAN JUAN APÓSTOL",
+        "canonical": false,
+        "toc": true
+      },
+      "current": {
+        "usfm": "2JN.1",
+        "human": "2 Juan 1"
+      },
+      "next": {
+        "usfm": "3JN.INTRO1",
+        "human": "3 Juan TERCERA EPÍSTOLA DE SAN JUAN APÓSTOL",
+        "canonical": false,
+        "toc": true
+      },
+      "items": [
+        {
+          "type": "heading1",
+          "verse_numbers": [],
+          "lines": [
+            "Salutación"
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            1
+          ],
+          "lines": [
+            "El anciano a la señora elegida y a sus hijos, a quienes yo amo en la verdad; y no solo yo, sino también todos los que han conocido la verdad,"
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            2
+          ],
+          "lines": [
+            "a causa de la verdad que permanece en nosotros, y estará para siempre con nosotros:"
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            3
+          ],
+          "lines": [
+            "Sea con vosotros gracia, misericordia y paz, de Dios Padre y del Señor Jesucristo, Hijo del Padre, en verdad y en amor."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "heading1",
+          "verse_numbers": [],
+          "lines": [
+            "Permaneced en la doctrina de Cristo"
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            4
+          ],
+          "lines": [
+            "Mucho me regocijé porque he hallado a algunos de tus hijos andando en la verdad, conforme al mandamiento que recibimos del Padre."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            5
+          ],
+          "lines": [
+            "Y ahora te ruego, señora, no como escribiéndote un nuevo mandamiento, sino el que hemos tenido desde el principio, que nos amemos unos a otros."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            6
+          ],
+          "lines": [
+            "Y este es el amor, que andemos según sus mandamientos. Este es el mandamiento: que andéis en amor, como vosotros habéis oído desde el principio."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            7
+          ],
+          "lines": [
+            "Porque muchos engañadores han salido por el mundo, que no confiesan que Jesucristo ha venido en carne. Quien esto hace es el engañador y el anticristo."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            8
+          ],
+          "lines": [
+            "Mirad por vosotros mismos, para que no perdáis el fruto de vuestro trabajo, sino que recibáis galardón completo."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            9
+          ],
+          "lines": [
+            "Cualquiera que se extravía, y no persevera en la doctrina de Cristo, no tiene a Dios; el que persevera en la doctrina de Cristo, ese sí tiene al Padre y al Hijo."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            10
+          ],
+          "lines": [
+            "Si alguno viene a vosotros, y no trae esta doctrina, no lo recibáis en casa, ni le digáis: ¡Bienvenido!"
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            11
+          ],
+          "lines": [
+            "Porque el que le dice: ¡Bienvenido! participa en sus malas obras."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "heading1",
+          "verse_numbers": [],
+          "lines": [
+            "Espero ir a vosotros"
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            12
+          ],
+          "lines": [
+            "Tengo muchas cosas que escribiros, pero no he querido hacerlo por medio de papel y tinta, pues espero ir a vosotros y hablar cara a cara, para que nuestro gozo sea cumplido."
+          ],
+          "rlw_lines": []
+        },
+        {
+          "type": "verse",
+          "verse_numbers": [
+            13
+          ],
+          "lines": [
+            "Los hijos de tu hermana, la elegida, te saludan. Amén."
+          ],
+          "rlw_lines": []
+        }
+      ]
+    }
+  ]
+}

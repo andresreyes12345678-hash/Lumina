@@ -1,0 +1,75 @@
+{
+  "name": "lumina",
+  "version": "1.0.0",
+  "description": "Desktop presentation software for live events with instant triggering",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on http://localhost:5180 && cross-env VITE_DEV_SERVER_URL=http://localhost:5180 node scripts/start-electron.cjs",
+    "build": "tsc && vite build",
+    "electron:build": "electron-builder",
+    "package": "npm run build && npm run electron:build"
+  },
+  "keywords": [
+    "electron",
+    "presentation",
+    "live-events"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@fontsource/open-sans": "^5.2.7",
+    "dompurify": "^3.4.0",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "lucide-react": "^0.294.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.59.1",
+    "@types/dompurify": "^3.0.5",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vite-plugin-electron": "^0.28.0",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.lumina.app",
+    "productName": "Lúmina",
+    "icon": "Lumina-Icon.ico",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "dist-electron/**/*",
+      "dist/**/*",
+      "Lumina-Icon.ico"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "Lumina-Icon.ico"
+    },
+    "mac": {
+      "icon": "Lumina-Icon.ico"
+    }
+  },
+  "optionalDependencies": {
+    "@julusian/ndi": "npm:null@*"
+  }
+}
