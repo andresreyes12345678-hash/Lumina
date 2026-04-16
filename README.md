@@ -1,6 +1,6 @@
 # Lúmina
 
-Software profesional para presentaciones en eventos en vivo.
+Software para presentaciones en eventos en vivo.
 
 ## Disclaimer / Aviso Legal
 
