@@ -1,6 +1,6 @@
 {
   "name": "lumina",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop presentation software for live events with instant triggering",
   "main": "electron/main.cjs",
   "type": "module",
@@ -22,6 +22,7 @@
   "dependencies": {
     "@fontsource/open-sans": "^5.2.7",
     "dompurify": "^3.4.0",
+    "electron-updater": "^6.8.9",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
     "fluent-ffmpeg": "^2.1.3",
@@ -61,13 +62,27 @@
       "dist/**/*",
       "Lumina-Icon.ico"
     ],
+    "extraResources": [
+      {
+        "from": "biblia",
+        "to": "biblia",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "Lumina-Icon.ico"
     },
     "mac": {
       "icon": "Lumina-Icon.ico"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "andresreyes12345678-hash",
+        "repo": "Lumina"
+      }
+    ]
   },
   "optionalDependencies": {
     "@julusian/ndi": "npm:null@*"

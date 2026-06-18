@@ -85,7 +85,43 @@ try {
         // NDI
         notifyNdiAnimation: (isAnimating) => ipcRenderer.send('ndi:animation', isAnimating),
         toggleNdi: (active) => ipcRenderer.send('ndi:toggle', active),
-        getNdiStatus: () => ipcRenderer.invoke('ndi:status')
+        getNdiStatus: () => ipcRenderer.invoke('ndi:status'),
+
+        // Auto Updater
+        updater: {
+            check: () => ipcRenderer.invoke('updater:check'),
+            install: () => ipcRenderer.invoke('updater:install'),
+            onChecking: (callback) => {
+                const subscription = () => callback();
+                ipcRenderer.on('updater:checking', subscription);
+                return () => ipcRenderer.removeListener('updater:checking', subscription);
+            },
+            onAvailable: (callback) => {
+                const subscription = (e, info) => callback(info);
+                ipcRenderer.on('updater:available', subscription);
+                return () => ipcRenderer.removeListener('updater:available', subscription);
+            },
+            onNotAvailable: (callback) => {
+                const subscription = (e, info) => callback(info);
+                ipcRenderer.on('updater:not-available', subscription);
+                return () => ipcRenderer.removeListener('updater:not-available', subscription);
+            },
+            onError: (callback) => {
+                const subscription = (e, err) => callback(err);
+                ipcRenderer.on('updater:error', subscription);
+                return () => ipcRenderer.removeListener('updater:error', subscription);
+            },
+            onDownloadProgress: (callback) => {
+                const subscription = (e, progress) => callback(progress);
+                ipcRenderer.on('updater:download-progress', subscription);
+                return () => ipcRenderer.removeListener('updater:download-progress', subscription);
+            },
+            onDownloaded: (callback) => {
+                const subscription = (e, info) => callback(info);
+                ipcRenderer.on('updater:downloaded', subscription);
+                return () => ipcRenderer.removeListener('updater:downloaded', subscription);
+            }
+        }
     });
 
     console.log('[Preload] Secure electronAPI exposed');

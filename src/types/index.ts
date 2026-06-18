@@ -199,6 +199,18 @@ export interface ElectronAPI {
     toggleNdi: (active: boolean) => void;
     getNdiStatus: () => Promise<{ installed: boolean; active: boolean }>;
     notifyNdiAnimation: (isAnimating: boolean) => void;
+
+    // Updater
+    updater?: {
+        check: () => void;
+        install: () => void;
+        onChecking: (callback: () => void) => () => void;
+        onAvailable: (callback: (info: any) => void) => () => void;
+        onNotAvailable: (callback: (info: any) => void) => () => void;
+        onError: (callback: (err: string) => void) => () => void;
+        onDownloadProgress: (callback: (progress: any) => void) => () => void;
+        onDownloaded: (callback: (info: any) => void) => () => void;
+    };
 }
 
 // Extend Window interface for TypeScript

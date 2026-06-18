@@ -266,6 +266,10 @@ app.whenReady().then(() => {
     createControlWindow();
     createStageWindow();
 
+    // 4. Initialize Auto Updater
+    const updater = require('./updater.cjs');
+    updater.initialize(controlWindow);
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createControlWindow();

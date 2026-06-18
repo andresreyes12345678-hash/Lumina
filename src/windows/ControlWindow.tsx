@@ -9,6 +9,7 @@ import VideoControls from '../components/RightColumn/VideoControls';
 import RecentBibleHistory from '../components/RightColumn/RecentBibleHistory';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { useStore } from '../store/useStore';
+import UpdateNotification from '../components/Shared/UpdateNotification';
 
 const ControlWindow: React.FC = () => {
     // Activate global hotkeys
@@ -55,7 +56,7 @@ const ControlWindow: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="h-screen w-screen bg-gray-950 flex flex-col items-center justify-center select-none cursor-default animation-fade-out">
+            <div className="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center select-none cursor-default animation-fade-out">
                 <div className="text-center space-y-6 animate-pulse">
                     <h1 className="text-6xl font-bold text-white tracking-widest mb-8 text-shadow-glow">
                         LÚMINA
@@ -77,7 +78,7 @@ const ControlWindow: React.FC = () => {
     }
 
     return (
-        <div className="h-screen w-screen bg-gray-900 text-gray-100 overflow-hidden">
+        <div className="absolute inset-0 bg-gray-900 text-gray-100 overflow-hidden">
             {/* 3-Column Layout */}
             <div className="grid grid-cols-[320px_1fr_380px] h-full">
                 {/* Left Column - Library & Resources */}
@@ -111,6 +112,8 @@ const ControlWindow: React.FC = () => {
                     )}
                 </div>
             </div>
+            
+            <UpdateNotification />
         </div>
     );
 };

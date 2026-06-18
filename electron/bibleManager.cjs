@@ -12,10 +12,10 @@ const { ipcMain, app } = require('electron');
 // ── Path resolution ────────────────────────────────────────────────────────────
 
 const getBibleBasePath = () => {
-    const isDev = process.env.VITE_DEV_SERVER_URL;
+    const isDev = !app.isPackaged || !!process.env.VITE_DEV_SERVER_URL;
     return isDev
         ? path.join(process.cwd(), 'biblia')
-        : path.join(app.getAppPath(), 'biblia');
+        : path.join(process.resourcesPath, 'biblia');
 };
 
 // Slug table: bookIndex (1-based) → file slug
