@@ -11,7 +11,7 @@ console.log('[Start Script] ELECTRON_RUN_AS_NODE:', process.env.ELECTRON_RUN_AS_
 const child = spawn(electron, ['.'], {
     env: process.env,
     stdio: 'inherit',
-    shell: true,
+    shell: false,
     cwd: path.join(__dirname, '..')
 });
 

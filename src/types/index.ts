@@ -136,8 +136,8 @@ export const TYPE_LABELS: Record<SlideType, string> = {
 export interface ElectronAPI {
     triggerSlide: (slide: Slide | null) => void;
     blackout: () => void;
-    onUpdateStage: (callback: (slide: Slide | null) => void) => void;
-    onUpdatePreview: (callback: (slide: Slide | null) => void) => void;
+    onUpdateStage: (callback: (slide: Slide | null) => void) => () => void;
+    onUpdatePreview: (callback: (slide: Slide | null) => void) => () => void;
     getFilePath: (file: File) => string;
     // Media Manager
     importMedia?: (paths: string[]) => Promise<any>;
@@ -148,9 +148,12 @@ export interface ElectronAPI {
 
     // Video Sync
     sendVideoControl?: (control: { action: 'play' | 'pause' | 'seek' | 'loop', time?: number, value?: boolean }) => void;
-    onVideoControl?: (callback: (control: { action: 'play' | 'pause' | 'seek' | 'loop', time?: number, value?: boolean }) => void) => void;
+    onVideoControl?: (callback: (control: { action: 'play' | 'pause' | 'seek' | 'loop', time?: number, value?: boolean }) => void) => () => void;
     sendVideoEnded?: () => void;
     onVideoEnded: (callback: () => void) => () => void;
+    // Dedicated volume channel (Stage only — no IPC feedback loop)
+    sendVideoVolume?: (volume: number) => void;
+    onVideoVolume?: (callback: (data: { volume: number }) => void) => () => void;
     // Data Persistence
     loadData: () => Promise<any>;
     saveData: (data: any) => Promise<{ success: boolean; error?: string }>;
@@ -188,6 +191,14 @@ export interface ElectronAPI {
         error?: string; 
     }>;
     getBibleVersions: () => Promise<{ success: boolean; versions?: string[]; error?: string }>;
+
+    // NDI & Window Control
+    toggleProjection: () => void;
+    requestCurrentState: () => void;
+    onGetCurrentState: (callback: () => void) => () => void;
+    toggleNdi: (active: boolean) => void;
+    getNdiStatus: () => Promise<{ installed: boolean; active: boolean }>;
+    notifyNdiAnimation: (isAnimating: boolean) => void;
 }
 
 // Extend Window interface for TypeScript

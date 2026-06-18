@@ -221,18 +221,19 @@ interface VideoEngineProps {
     };
     onPlaybackUpdate?: (state: { currentTime: number; duration: number; isPlaying: boolean }) => void;
     muted?: boolean;
+    volume?: number; // 0.0 to 1.0 — explicit volume control (overrides control.volume)
 }
 
-const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLooping, onPlaybackUpdate, muted = false }) => {
+const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLooping, onPlaybackUpdate, muted = false, volume }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [isFadingOut, setIsFadingOut] = useState(false);
     const [hasError, setHasError] = useState(false);
     const isMounted = useRef(true);
-    const loadIdRef = useRef(0); // Track load attempts
-    const isLoopingRef = useRef(isLooping); // Track latest loop state without triggering video reload
+    const loadIdRef = useRef(0); // Track load attempts to invalidate stale callbacks
+    const isLoopingRef = useRef(isLooping); // Ref to avoid triggering video reload on loop change
 
-    // Internal refs to track control state to avoid redundant calls
+    // Internal refs to track control state and avoid redundant calls
     const lastSeekRef = useRef<number | undefined>(undefined);
 
     // Keep the looping ref in sync with props, and update native video.loop attribute
@@ -243,33 +244,52 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
         }
     }, [isLooping]);
 
-    // Initial Load
+    // Volume control effect — updates when volume prop or muted prop changes
+    React.useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (muted) {
+            video.muted = true;
+        } else {
+            video.muted = false;
+            // Explicit volume prop takes priority, otherwise use control.volume, fallback to 0.8
+            const targetVolume = volume ?? control?.volume ?? 0.8;
+            video.volume = Math.max(0, Math.min(1, targetVolume));
+        }
+    }, [muted, volume, control?.volume]);
+
+    // Initial Load — fires only when src changes
     React.useEffect(() => {
         isMounted.current = true;
         const video = videoRef.current;
         if (!video) return;
 
-        // Reset state
+        // Reset visual state for new source
         setIsVisible(false);
         setIsFadingOut(false);
         setHasError(false);
+        lastSeekRef.current = undefined;
 
-        // Increment load ID to invalidate previous attempts
+        // Increment load ID to invalidate previous async attempts
         const currentLoadId = ++loadIdRef.current;
 
         const loadVideo = async () => {
             return new Promise<void>((resolve, reject) => {
+                // 15s timeout — accommodates large files on slower storage
                 const timeout = setTimeout(() => {
                     if (isMounted.current && currentLoadId === loadIdRef.current) {
-                        reject(new Error('Video load timeout (5s)'));
+                        reject(new Error('Video load timeout (15s)'));
                     }
-                }, 5000);
+                }, 15000);
 
+                // Use 'loadeddata' instead of 'canplaythrough':
+                // - canplaythrough waits until enough data is buffered for smooth playback (can be slow on large files)
+                // - loadeddata fires as soon as the first frame is decoded and ready to display (much faster)
                 const onReady = () => {
                     clearTimeout(timeout);
-                    // Check for invalid dimensions (Unsupported Codec)
+                    // Check for invalid dimensions (unsupported codec / decode failure)
                     if (video.videoWidth === 0 || video.videoHeight === 0) {
-                        reject(new Error(`Invalid Dimensions: ${video.videoWidth}x${video.videoHeight}`));
+                        reject(new Error(`Invalid dimensions: ${video.videoWidth}x${video.videoHeight}`));
                         return;
                     }
                     resolve();
@@ -279,14 +299,12 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
                     clearTimeout(timeout);
                     const videoEl = e.target as HTMLVideoElement;
                     const err = videoEl.error;
-                    console.error('[VideoEngine] Load Error:', err, 'Src:', src);
-                    if (err) {
-                        console.error(`Code: ${err.code}, Message: ${err.message}`);
-                    }
+                    console.error('[VideoEngine] Load error:', err, 'Src:', src);
+                    if (err) console.error(`Code: ${err.code}, Message: ${err.message}`);
                     reject(err || new Error('Unknown video error'));
                 };
 
-                video.addEventListener('canplaythrough', onReady, { once: true });
+                video.addEventListener('loadeddata', onReady, { once: true });
                 video.addEventListener('error', onError, { once: true });
 
                 video.src = src;
@@ -296,35 +314,26 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
 
         loadVideo()
             .then(async () => {
-                if (!isMounted.current || currentLoadId !== loadIdRef.current) {
-                    return;
+                if (!isMounted.current || currentLoadId !== loadIdRef.current) return;
+
+                // Apply initial volume before playing
+                if (muted) {
+                    video.muted = true;
+                } else {
+                    video.muted = false;
+                    const targetVolume = volume ?? control?.volume ?? 0.8;
+                    video.volume = Math.max(0, Math.min(1, targetVolume));
                 }
 
-                // --- DOUBLE-TAP SOFT-START (Anti Metal-Audio Glitch) ---
-                const originalMuted = muted; 
-                video.muted = true;          // Force silence for pre-warm
-                if ('preservesPitch' in video) {
-                    (video as any).preservesPitch = false; // Prevents generic pitch correction artifacts
-                }
+                // Apply initial loop setting
+                video.loop = !!isLoopingRef.current;
 
-                try {
-                    await video.play();
-                    await new Promise(res => setTimeout(res, 300)); // Play 300ms
-                    video.load();            // Force destroy and rebuild the audio node
-                } catch {
-                    // Ignore interruption errors during pre-warm
-                }
-                
-                video.muted = originalMuted; // Restore original intent
-                // --- End Double-Tap ---
-
-                // If control says playing, play.
+                // Start playback if control says so (or no control provided defaults to playing)
                 if (!control || control.isPlaying) {
                     try {
                         await video.play();
                     } catch {
-                        // Ignore "interrupted" errors caused by rapid switching
-                        // Silent failure for interruption
+                        // Silent: 'interrupted' errors happen on rapid src switches, not an actual failure
                     }
                 }
 
@@ -332,33 +341,38 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
                     setIsVisible(true);
                 }
             })
-            .catch(() => {
+            .catch((err) => {
                 if (isMounted.current && currentLoadId === loadIdRef.current) {
+                    console.error('[VideoEngine] Failed to load video:', err);
                     setHasError(true);
                 }
             });
 
-        // Setup Time Update Listener
+        // Time update listener — throttled via rAF to avoid excessive store updates
+        let rafId: number | null = null;
         const handleTimeUpdate = () => {
-            if (onPlaybackUpdate && video) {
-                onPlaybackUpdate({
-                    currentTime: video.currentTime,
-                    duration: video.duration,
-                    isPlaying: !video.paused
-                });
-            }
+            if (!onPlaybackUpdate || !video) return;
+            if (rafId !== null) return; // Already scheduled
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                if (onPlaybackUpdate && video) {
+                    onPlaybackUpdate({
+                        currentTime: video.currentTime,
+                        duration: video.duration,
+                        isPlaying: !video.paused
+                    });
+                }
+            });
         };
 
-        // Loop Logic (reads from ref to avoid stale closures)
+        // Loop / End handler
         const handleEnded = () => {
             if (isLoopingRef.current || video.loop) {
                 video.currentTime = 0;
-                video.play().catch(() => { });
+                video.play().catch(() => {});
             } else {
                 setIsFadingOut(true);
-                // Notify system that video ended (to trigger auto-clear)
-                // GUARD: Only send from StageDisplay (which has no onPlaybackUpdate)
-                // to prevent the LivePreview from racing and killing the media layer
+                // Only Stage (no onPlaybackUpdate) sends video-ended to avoid race conditions
                 if (!onPlaybackUpdate) {
                     window.electronAPI.sendVideoEnded?.();
                 }
@@ -375,33 +389,34 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
 
         return () => {
             isMounted.current = false;
+            if (rafId !== null) cancelAnimationFrame(rafId);
             video.removeEventListener('timeupdate', handleTimeUpdate);
             video.removeEventListener('ended', handleEnded);
             video.removeEventListener('play', handlePlay);
 
-            // Stop playback on unmount to prevent ghost audio
+            // Clean teardown: stop audio, release media reference
             video.pause();
-            video.removeAttribute('src'); // Cleaner than src=""
+            video.removeAttribute('src');
             video.load();
         };
-    }, [src]); // Only reload on source change. Loop state is handled via ref + separate effect.
+    }, [src]); // Only reload on source change; loop/volume handled via separate effects
 
-    // React to Control Props (Legacy/Props-based control fallback)
+    // React to Control Props (play/pause/seek from store)
     React.useEffect(() => {
         const video = videoRef.current;
         if (!video || !control) return;
 
-        // Play/Pause
+        // Play / Pause
         if (control.isPlaying && video.paused) {
-            video.play().catch(() => {
-                // Silent catch
-            });
+            video.play().catch(() => {});
         } else if (!control.isPlaying && !video.paused) {
             video.pause();
         }
 
-        // Seek
-        if (control.seekTime !== undefined && control.seekTime !== lastSeekRef.current && control.seekTime !== 0) {
+        // Seek — 0.5s threshold prevents micro-seeks from rounding errors
+        if (control.seekTime !== undefined &&
+            control.seekTime !== lastSeekRef.current &&
+            control.seekTime !== 0) {
             if (Math.abs(video.currentTime - control.seekTime) > 0.5) {
                 video.currentTime = control.seekTime;
                 lastSeekRef.current = control.seekTime;
@@ -410,7 +425,7 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
         }
     }, [control]);
 
-    // IPC Control Listener (New)
+    // IPC Control Listener (Stage window receives commands from Control window)
     React.useEffect(() => {
         if (!window.electronAPI?.onVideoControl) return;
 
@@ -419,7 +434,7 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
             if (!video) return;
 
             if (data.action === 'play') {
-                video.play().catch(() => { });
+                video.play().catch(() => {});
             } else if (data.action === 'pause') {
                 video.pause();
             } else if (data.action === 'seek' && data.time !== undefined) {
@@ -427,8 +442,21 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
                 setIsFadingOut(false);
             } else if (data.action === 'loop' && data.value !== undefined) {
                 video.loop = data.value;
-                isLoopingRef.current = data.value; // Keep ref in sync with IPC commands
+                isLoopingRef.current = data.value;
             }
+        });
+
+        return cleanup;
+    }, []);
+
+    // IPC Volume Listener (Stage window receives volume changes from Control window)
+    React.useEffect(() => {
+        if (!window.electronAPI?.onVideoVolume) return;
+
+        const cleanup = window.electronAPI.onVideoVolume((data: { volume: number }) => {
+            const video = videoRef.current;
+            if (!video || video.muted) return;
+            video.volume = Math.max(0, Math.min(1, data.volume));
         });
 
         return cleanup;
@@ -451,17 +479,16 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
             style={{
                 objectFit: scaling === 'fill' ? 'fill' : 'contain',
                 opacity: (isVisible && !isFadingOut) ? 1 : 0,
-                transition: isFadingOut ? 'opacity 1.2s ease-out' : 'opacity 0.5s ease-in',
-                // GPU RENDERING OPTIMIZATIONS (Broadcast Quality)
-                transform: 'translateZ(0)',        // Force GPU layer
-                backfaceVisibility: 'hidden',      // Optimize 3D transforms
-                willChange: 'transform, opacity'   // Hint browser for optimization
+                transition: isFadingOut ? 'opacity 1.2s ease-out' : 'opacity 0.4s ease-in',
+                // GPU compositing layer — avoids repaints on opacity/transform changes
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
             } as React.CSSProperties}
-            // @ts-ignore
-            preservesPitch={false}
             muted={muted}
             loop={isLooping}
             playsInline
+            preload="auto"
+            crossOrigin="anonymous"
         />
     );
 };

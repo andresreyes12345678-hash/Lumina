@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useStore } from '../../store/useStore';
 import {
     Play, Pause, Square,
-    RotateCcw, RotateCw, Repeat
+    RotateCcw, RotateCw, Repeat,
+    Volume2, Volume1, VolumeX
 } from 'lucide-react';
 
 interface VideoControlsProps {
@@ -12,18 +13,19 @@ interface VideoControlsProps {
 const VideoControls: React.FC<VideoControlsProps> = () => {
     const {
         videoPlaybackState,
-        setVideoPlaybackState
+        setVideoPlaybackState,
+        setVolume
     } = useStore();
 
-    // Use passed slide (Library) or fallback to Active (Live) -> Only needed for initial props if not using Store
-    // const targetSlide = slide || activeSlide; // LEGACY: Replaced by runtime state
+    const { isPlaying, currentTime, duration, isLooping = false, volume = 0.8 } = videoPlaybackState;
 
-    const { isPlaying, currentTime, duration, isLooping = false } = videoPlaybackState;
-    // const isLooping = targetSlide?.isLooping || false; // LEGACY: Replaced by runtime state
+    // Track last non-zero volume for mute toggle restore
+    const lastVolumeRef = useRef<number>(volume > 0 ? volume : 0.8);
+    const isMuted = volume === 0;
 
     // Helper: Format Seconds to MM:SS
     const formatTime = (seconds: number) => {
-        if (!seconds || isNaN(seconds)) return "00:00";
+        if (!seconds || isNaN(seconds)) return '00:00';
         const m = Math.floor(seconds / 60);
         const s = Math.floor(seconds % 60);
         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -34,7 +36,7 @@ const VideoControls: React.FC<VideoControlsProps> = () => {
     };
 
     const handleStop = () => {
-        setVideoPlaybackState({ isPlaying: false, currentTime: 0, seekTime: 0 }); // Reset to start, preserve loop preference
+        setVideoPlaybackState({ isPlaying: false, currentTime: 0, seekTime: 0 });
     };
 
     const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,27 +53,39 @@ const VideoControls: React.FC<VideoControlsProps> = () => {
         const newState = !isLooping;
         setVideoPlaybackState({ isLooping: newState });
 
-        // PERSISTENCE: If we are playing a file from the Media Library (Background Layer)
-        // we should save this preference to the file itself.
+        // PERSISTENCE: Save loop preference to the source MediaFile
         const { activeMediaSnapshot, updateMediaFile } = useStore.getState();
-
-        // Check if current media matches active snapshot and has an ID
-        if (activeMediaSnapshot && activeMediaSnapshot.id) {
-            // Optimistic update to store (and disk via side-effect in updateMediaFile)
-            console.log('[VideoControls] Persisting loop state for:', activeMediaSnapshot.id, newState);
+        if (activeMediaSnapshot?.id) {
             updateMediaFile(activeMediaSnapshot.id, { isLooping: newState });
-
-            // Note: We also need to update the snapshot itself so subsequent toggles read correct ID/State?
-            // Actually no, snapshot is a "Snapshot". But since we just updated the SOURCE file,
-            // next time we click it, it will load correctly.
-            // But we should probably update the valid snapshot too if we want to be 100% correct,
-            // although 'activeMediaSnapshot' is slightly redundant with 'videoPlaybackState' in this runtime context.
         }
     };
 
+    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newVolume = parseFloat(e.target.value);
+        if (newVolume > 0) lastVolumeRef.current = newVolume;
+        setVolume(newVolume);
+    };
+
+    const handleMuteToggle = () => {
+        if (isMuted) {
+            // Restore last volume (minimum 0.1)
+            setVolume(lastVolumeRef.current || 0.8);
+        } else {
+            lastVolumeRef.current = volume;
+            setVolume(0);
+        }
+    };
+
+    // Pick volume icon based on level
+    const VolumeIcon = isMuted || volume === 0
+        ? VolumeX
+        : volume < 0.5
+            ? Volume1
+            : Volume2;
+
     return (
-        <div className="px-4 pt-3 pb-2 space-y-1">
-            {/* Header / Time */}
+        <div className="px-4 pt-3 pb-2 space-y-2">
+            {/* Time Display */}
             <div className="flex justify-between items-center text-[10px] text-blue-400 font-mono px-1">
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
@@ -85,7 +99,7 @@ const VideoControls: React.FC<VideoControlsProps> = () => {
                 step="0.1"
                 value={currentTime}
                 onChange={handleSeek}
-                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 accent-blue-500 mb-1"
+                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 accent-blue-500"
             />
 
             {/* Transport Controls */}
@@ -126,6 +140,37 @@ const VideoControls: React.FC<VideoControlsProps> = () => {
                 <button onClick={handleStop} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors" title="Detener">
                     <Square size={14} fill="currentColor" />
                 </button>
+            </div>
+
+            {/* Volume Control Row */}
+            <div className="flex items-center gap-2 pt-1">
+                {/* Mute toggle button */}
+                <button
+                    onClick={handleMuteToggle}
+                    className={`flex-shrink-0 p-1 rounded transition-colors ${
+                        isMuted ? 'text-red-400 hover:text-red-300' : 'text-gray-400 hover:text-white'
+                    }`}
+                    title={isMuted ? 'Activar sonido' : 'Silenciar'}
+                >
+                    <VolumeIcon size={14} />
+                </button>
+
+                {/* Volume Slider */}
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 accent-blue-400"
+                    title={`Volumen: ${Math.round(volume * 100)}%`}
+                />
+
+                {/* Volume Percentage */}
+                <span className="flex-shrink-0 text-[10px] text-gray-500 font-mono w-8 text-right">
+                    {Math.round(volume * 100)}%
+                </span>
             </div>
         </div>
     );

@@ -132,6 +132,7 @@ interface Store {
     };
     setVideoPlaybackState: (updates: Partial<Store['videoPlaybackState']>) => void;
     reportVideoStatus: (status: Partial<Store['videoPlaybackState']>) => void;
+    setVolume: (volume: number) => void; // Dedicated volume control with IPC
 
     // Projection Mode
     isProjectionActive: boolean;
@@ -293,7 +294,7 @@ export const useStore = create<Store>((set, get) => ({
     videoPlaybackState: {
         isPlaying: true,
         isLooping: false,
-        volume: 0,
+        volume: 0.8,        // Default 80% — previously was 0 (silently muted)
         currentTime: 0,
         duration: 0,
         seekTime: 0
@@ -335,6 +336,17 @@ export const useStore = create<Store>((set, get) => ({
         set((state) => ({
             videoPlaybackState: { ...state.videoPlaybackState, ...status }
         }));
+    },
+
+    // Dedicated volume setter — updates store AND sends IPC directly to Stage (bypasses full slide trigger)
+    setVolume: (volume: number) => {
+        const clampedVolume = Math.max(0, Math.min(1, volume));
+        set((state) => ({
+            videoPlaybackState: { ...state.videoPlaybackState, volume: clampedVolume }
+        }));
+        if (window.electronAPI?.sendVideoVolume) {
+            window.electronAPI.sendVideoVolume(clampedVolume);
+        }
     },
 
     // Bible State

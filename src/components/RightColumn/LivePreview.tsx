@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Slide } from '../../types';
-import { Monitor, MonitorOff } from 'lucide-react';
+import { Monitor } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import ScalableSlide from '../Shared/ScalableSlide';
 
@@ -56,9 +56,11 @@ const LivePreview: React.FC = () => {
 
             {/* 16:9 Preview Box */}
             <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border-2 border-gray-700 relative group">
+                {/* muted={true}: Audio plays ONLY from the Stage (projection) window, never from preview */}
                 <ScalableSlide
                     slide={previewSlide}
                     onPlaybackUpdate={handlePlaybackUpdate}
+                    muted={true}
                 />
             </div>
         </div>

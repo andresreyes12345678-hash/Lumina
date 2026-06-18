@@ -98,7 +98,8 @@ const StageDisplay: React.FC = () => {
                 };
 
                 let nextBuffer = [...prev, newItem];
-                if (nextBuffer.length > 3) nextBuffer = nextBuffer.slice(nextBuffer.length - 3);
+                // Cap at 2 simultaneous layers — reduces peak video decode instances during transitions
+                if (nextBuffer.length > 2) nextBuffer = nextBuffer.slice(nextBuffer.length - 2);
                 return nextBuffer;
             });
 
@@ -163,12 +164,13 @@ const StageDisplay: React.FC = () => {
         const topItem = bgBuffer[bgBuffer.length - 1];
         // Only clean up if top item is fully visible
         if (topItem.opacity === 1) {
+            // Clean up old layer as soon as the transition completes
             const timer = setTimeout(() => {
                 setBgBuffer(prev => {
                     if (prev.length <= 1) return prev;
                     return [prev[prev.length - 1]];
                 });
-            }, topItem.duration + 50);
+            }, topItem.duration + 20); // Tight cleanup — 20ms grace period after transition
             return () => clearTimeout(timer);
         }
     }, [bgBuffer]);

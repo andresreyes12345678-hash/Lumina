@@ -1,5 +1,22 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, protocol, net } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
+
+// ===================================================
+// PROTOCOL: Must be declared BEFORE app.whenReady()
+// Enables streaming (range requests) for lumina-media://
+// Required for video seeking to work correctly
+// ===================================================
+protocol.registerSchemesAsPrivileged([{
+    scheme: 'lumina-media',
+    privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        stream: true,       // CRITICAL: enables HTTP Range requests for video seeking
+        bypassCSP: true
+    }
+}]);
 
 // Determine development mode correctly using standard electron paradigms
 const isDev = !app.isPackaged || !!process.env.VITE_DEV_SERVER_URL;
@@ -12,20 +29,14 @@ let splashWindow = null;
 const iconPath = path.join(__dirname, '..', 'Lumina-Icon.ico');
 
 // === PERFORMANCE OPTIMIZATIONS ===
-// Enable hardware acceleration (GPU rendering for video)
-// This is enabled by default, but we ensure it's not disabled
-// app.disableHardwareAcceleration(); // DO NOT call this
-
-// Clean implementation without custom protocols
-// Relying on webSecurity: false to allow file:// access
-app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
-// Force GPU acceleration for video decoding
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('audio-buffer-size', '4096');
-app.commandLine.appendSwitch('force-wave-audio');
-app.commandLine.appendSwitch('disable-audio-output-resampler');
-app.commandLine.appendSwitch('disable-accelerated-video-decode');
+// GPU Video Decode — uses DXVA on Windows, VideoToolbox on macOS, VA-API on Linux
+// NEVER disable this — it's the most impactful flag for video quality and performance
+app.commandLine.appendSwitch('enable-gpu-rasterization');      // GPU canvas rendering
+app.commandLine.appendSwitch('enable-zero-copy');              // Zero-copy video upload to GPU
+app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport'); // HEVC/H.265 hw decode
+// NOTE: 'disable-accelerated-video-decode' was REMOVED — it was forcing CPU software decoding
+// NOTE: 'force-wave-audio' was REMOVED — WaveOut is legacy, WASAPI gives better quality/latency
+// NOTE: 'disable-audio-output-resampler' was REMOVED — causes format mismatches at audio output
 
 
 
@@ -210,14 +221,27 @@ app.whenReady().then(() => {
         mediaManager.registerHandlers();
 
         // Custom Protocol for local media playback under secure CSP
-        const { protocol } = require('electron');
-        protocol.registerFileProtocol('lumina-media', (request, callback) => {
-            const url = request.url.replace('lumina-media://', '');
+        // Uses protocol.handle() (modern API) instead of deprecated registerFileProtocol
+        // Supports HTTP Range requests via net.fetch() → enables video seeking and streaming
+        protocol.handle('lumina-media', (request) => {
             try {
-                // Remove trailing slashes gracefully handled by node APIs
-                return callback(decodeURIComponent(url));
+                const rawPath = request.url.slice('lumina-media://'.length);
+                let filePath = decodeURIComponent(rawPath);
+                
+                // Fix Windows paths where `standard: true` stripped the colon from drive letter (e.g. "c/Users" -> "c:/Users")
+                if (/^[a-zA-Z]\//.test(filePath)) {
+                    filePath = filePath[0] + ':' + filePath.slice(1);
+                }
+                // Strip leading slash if present before Windows drive letter (e.g. "/c:/Users" or "/C:/Users")
+                if (/^\/[a-zA-Z]:\//.test(filePath)) {
+                    filePath = filePath.slice(1);
+                }
+
+                const normalizedPath = path.normalize(filePath);
+                return net.fetch(pathToFileURL(normalizedPath).toString());
             } catch (error) {
-                if (isDev) console.error('[Protocol] Fallo al decodificar la ruta:', error);
+                if (isDev) console.error('[Protocol] Failed to handle request:', error);
+                return new Response('Not Found', { status: 404 });
             }
         });
 
@@ -295,9 +319,20 @@ ipcMain.on('trigger-slide', (event, slideData) => {
     }
 });
 
-// 2. Video Control (Sync Play/Pause/Seek)
+// 2. Video Control — send ONLY to Stage (not broadcast to all windows)
+// Previously used broadcast() which caused the Control window's LivePreview
+// to also react to its own commands, creating a double-control loop.
 ipcMain.on('video-control', (event, controlData) => {
-    broadcast('video-control', controlData);
+    if (stageWindow && !stageWindow.isDestroyed()) {
+        stageWindow.webContents.send('video-control', controlData);
+    }
+});
+
+// 2b. Volume Control — dedicated channel for volume (Stage only)
+ipcMain.on('video-volume', (event, volumeData) => {
+    if (stageWindow && !stageWindow.isDestroyed()) {
+        stageWindow.webContents.send('video-volume', volumeData);
+    }
 });
 
 // 3. Video Ended (Upstream signal)

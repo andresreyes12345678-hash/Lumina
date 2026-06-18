@@ -55,6 +55,14 @@ try {
             return () => ipcRenderer.removeListener('video-ended', subscription);
         },
 
+        // Dedicated volume control channel (Stage only)
+        sendVideoVolume: (volume) => ipcRenderer.send('video-volume', { volume }),
+        onVideoVolume: (callback) => {
+            const subscription = (event, data) => callback(data);
+            ipcRenderer.on('video-volume', subscription);
+            return () => ipcRenderer.removeListener('video-volume', subscription);
+        },
+
         // System Events
         on: (channel, callback) => {
             const validChannels = ['media:library-update', 'media:conversion-progress'];

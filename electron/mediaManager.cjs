@@ -146,10 +146,14 @@ async function importMediaFile(event, sourcePath) {
                 // Check Audio Quality
                 const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
                 if (audioStream) {
+                    // AAC and MP3 are natively supported by Chromium in MP4 containers
+                    // Opus in MP4 is NOT reliably supported and causes audio glitches
                     const isGoodCodec = ['aac', 'mp3'].includes(audioStream.codec_name);
                     if (isGoodCodec) {
                         audioNeedsConversion = false;
-                        console.log(`[MediaManager] Good audio codec detected (${audioStream.codec_name}). Using passthrough.`);
+                        console.log(`[MediaManager] Compatible audio codec (${audioStream.codec_name}). Using passthrough.`);
+                    } else {
+                        console.log(`[MediaManager] Incompatible audio codec (${audioStream.codec_name}). Will re-encode to AAC.`);
                     }
                 }
             } catch (e) {
@@ -185,7 +189,7 @@ async function importMediaFile(event, sourcePath) {
                         .outputOptions([
                             '-profile:v high',
                             '-level 4.1',
-                            '-crf 18',                  // Visually lossless
+                            '-crf 16',                  // Near-lossless (improved from 18)
                             '-preset slow',             // Preserve details
                             '-tune film',               // Preserve grain and sharpness
                             '-pix_fmt yuv420p',         // Maximum compatibility
@@ -196,13 +200,13 @@ async function importMediaFile(event, sourcePath) {
                     
                     if (audioNeedsConversion) {
                         command
-                            .audioCodec('libopus')
-                            .audioBitrate('320k')
+                            // AAC is the standard audio codec for MP4 containers.
+                            // libopus in MP4 is NOT reliably supported by Chromium's HTMLVideoElement
+                            // and causes audio glitches, distortion, or complete silence.
+                            .audioCodec('aac')
+                            .audioBitrate('256k')      // 256k AAC ≈ transparent quality
                             .audioChannels(2)
-                            .audioFrequency(48000)
-                            .outputOptions([
-                                '-af loudnorm'
-                            ]);
+                            .audioFrequency(48000);
                     } else {
                         command.audioCodec('copy');
                     }
@@ -265,15 +269,16 @@ async function importMediaFile(event, sourcePath) {
                 });
             }
 
-            // Generate Thumbnail
+            // Generate Thumbnail — high quality 480px JPEG
             await new Promise((resolve, reject) => {
                 ffmpeg(targetPath)
                     .screenshots({
                         timestamps: ['00:00:01.000'],
                         filename: thumbFilename,
                         folder: thumbnailsPath,
-                        size: '320x?'
+                        size: '480x?'           // Improved from 320x — sharper in the library grid
                     })
+                    .outputOptions(['-q:v 2'])   // JPEG quality 2 = near-lossless (scale 1-31, lower=better)
                     .on('end', resolve)
                     .on('error', (err) => {
                         console.error('Thumbnail generation failed', err);
