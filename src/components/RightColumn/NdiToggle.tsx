@@ -30,7 +30,10 @@ const NdiToggle: React.FC = () => {
         <div className="pt-4 mt-2 border-t border-gray-700">
             <div className="flex items-center gap-2 mb-2">
                 <MonitorUp size={16} className={isActive ? "text-green-400" : "text-gray-400"} />
-                <h3 className="text-sm font-semibold text-gray-300">Transmisión NDI</h3>
+                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                    Transmisión NDI
+                    <span className="text-[9px] bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Próximamente</span>
+                </h3>
             </div>
             
             {!isInstalled ? (

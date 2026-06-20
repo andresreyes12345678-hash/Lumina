@@ -83,7 +83,7 @@ const MediaPanel: React.FC = () => {
                         url: `lumina-media://${f.path.replace(/\\/g, '/')}`,
                         type: f.type,
                         thumbnailUrl: f.thumbnail ? `lumina-media://${f.thumbnail.replace(/\\/g, '/')}` : undefined,
-                        folderId: existing?.folderId || 'general-media',
+                        folderId: f.folderId || existing?.folderId || 'general-media',
                         scaling: f.scaling || existing?.scaling || 'contain',
                         isLooping: f.isLooping || existing?.isLooping || false
                     };
