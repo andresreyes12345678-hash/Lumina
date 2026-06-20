@@ -26,7 +26,7 @@ let stageWindow = null;
 let splashWindow = null;
 
 // App icon path (works for both dev and production)
-const iconPath = path.join(__dirname, '..', 'Lumina-Icon.ico');
+const iconPath = path.join(__dirname, '..', 'LuminaICO.ico');
 
 // === PERFORMANCE OPTIMIZATIONS ===
 // GPU Video Decode — uses DXVA on Windows, VideoToolbox on macOS, VA-API on Linux
@@ -42,6 +42,7 @@ app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport'); /
 
 // --- SPLASH SCREEN ---
 function createSplashWindow() {
+    console.log('[Main] Creating splash window...');
     splashWindow = new BrowserWindow({
         width: 420,
         height: 380,
@@ -58,14 +59,25 @@ function createSplashWindow() {
         }
     });
 
+    console.log('[Main] Loading splash.html...');
     splashWindow.loadFile(path.join(__dirname, 'splash.html'));
 
+    splashWindow.webContents.on('did-finish-load', () => {
+        console.log('[Main] Splash window did-finish-load');
+    });
+
+    splashWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('[Main] Splash window failed to load:', errorCode, errorDescription);
+    });
+
     splashWindow.on('closed', () => {
+        console.log('[Main] Splash window closed');
         splashWindow = null;
     });
 }
 
 function createControlWindow() {
+    console.log('[Main] Creating control window...');
     controlWindow = new BrowserWindow({
         width: 1400,
         height: 900,
@@ -101,37 +113,57 @@ function createControlWindow() {
         }
     });
 
+    let hasShownControl = false;
+    const showControlWindow = (reason) => {
+        if (hasShownControl) return;
+        hasShownControl = true;
+        console.log(`[Main] Showing controlWindow (Reason: ${reason})...`);
+        
+        if (splashWindow && !splashWindow.isDestroyed()) {
+            console.log('[Main] Closing splash window...');
+            splashWindow.close();
+        }
+        
+        controlWindow.show();
+        controlWindow.focus();
+    };
+
     // Show main window when ready, close splash
     controlWindow.once('ready-to-show', () => {
-        // Small delay to ensure modules finish initializing
+        console.log('[Main] controlWindow event: ready-to-show');
         setTimeout(() => {
-            if (splashWindow && !splashWindow.isDestroyed()) {
-                splashWindow.close();
-            }
-            controlWindow.show();
-            controlWindow.focus();
+            showControlWindow('ready-to-show-event');
         }, 800); // 800ms grace period for smoother transition
+    });
+
+    // Fallback: If ready-to-show hasn't fired in 3.5 seconds, force show
+    const fallbackTimeout = setTimeout(() => {
+        if (!hasShownControl && controlWindow && !controlWindow.isDestroyed()) {
+            console.warn('[Main] Fallback triggered: ready-to-show did not fire in 3.5 seconds. Forcing show.');
+            showControlWindow('fallback-timeout');
+        }
+    }, 3500);
+
+    controlWindow.webContents.on('did-finish-load', () => {
+        console.log('[Main] controlWindow webContents event: did-finish-load');
+    });
+
+    controlWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('[Main] controlWindow webContents event: did-fail-load. Error:', errorCode, errorDescription);
     });
 
     // Load control window
     if (process.env.VITE_DEV_SERVER_URL) {
+        console.log('[Main] Loading development URL:', process.env.VITE_DEV_SERVER_URL);
         controlWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-
-        // DevTools behavior handled by developer manually
-        // controlWindow.webContents.on('did-finish-load', () => {
-        //    if (isDev) { 
-        //        controlWindow.webContents.openDevTools({ mode: 'right' }); 
-        //    }
-        // });
-
-        controlWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-            if (isDev) console.error('[Main] Failed to load:', errorCode, errorDescription);
-        });
     } else {
+        console.log('[Main] Loading production file: index.html');
         controlWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }
 
     controlWindow.on('closed', () => {
+        console.log('[Main] controlWindow closed');
+        clearTimeout(fallbackTimeout);
         controlWindow = null;
         if (stageWindow) {
             stageWindow.close();

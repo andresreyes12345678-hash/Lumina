@@ -4,6 +4,7 @@ import BiblePanel from './BiblePanel';
 import MediaPanel from './MediaPanel';
 import { useStore } from '../../store/useStore';
 import { Music, Book, Film } from 'lucide-react';
+import AppVersionFooter from '../Shared/AppVersionFooter';
 
 type TabType = 'songs' | 'bible' | 'media';
 
@@ -44,6 +45,9 @@ const LibraryTabs: React.FC = () => {
                 {activeTab === 'bible' && <BiblePanel />}
                 {activeTab === 'media' && <MediaPanel />}
             </div>
+
+            {/* Version Footer */}
+            <AppVersionFooter />
         </div>
     );
 };

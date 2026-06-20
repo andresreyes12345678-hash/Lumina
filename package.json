@@ -1,6 +1,6 @@
 {
   "name": "lumina",
-  "version": "1.0.1",
+  "version": "1.1.1",
   "description": "Desktop presentation software for live events with instant triggering",
   "main": "electron/main.cjs",
   "type": "module",
@@ -52,7 +52,7 @@
   "build": {
     "appId": "com.lumina.app",
     "productName": "Lúmina",
-    "icon": "Lumina-Icon.ico",
+    "icon": "LuminaICO.ico",
     "directories": {
       "output": "dist"
     },
@@ -60,7 +60,8 @@
       "electron/**/*",
       "dist-electron/**/*",
       "dist/**/*",
-      "Lumina-Icon.ico"
+      "LuminaICO.ico",
+      "LuminaICO.png"
     ],
     "extraResources": [
       {
@@ -71,10 +72,10 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "Lumina-Icon.ico"
+      "icon": "LuminaICO.ico"
     },
     "mac": {
-      "icon": "Lumina-Icon.ico"
+      "icon": "LuminaICO.ico"
     },
     "publish": [
       {
