@@ -125,9 +125,9 @@ async function importMediaFile(event, sourcePath) {
         if (!fs.existsSync(sourcePath)) throw new Error('File does not exist');
 
         const fileExt = path.extname(sourcePath).toLowerCase();
-        // Determine type (simple extension check for now)
-        const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(fileExt);
-        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fileExt);
+        // Determine type — broad extension support
+        const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.m4v', '.ts', '.3gp', '.mpg', '.mpeg', '.mts'].includes(fileExt);
+        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.svg', '.ico'].includes(fileExt);
 
         if (!isVideo && !isImage) throw new Error('Unsupported file type');
 
@@ -338,9 +338,13 @@ function registerHandlers() {
 
         for (const filePath of paths) {
             try {
+                console.log('[MediaManager] Importing file:', filePath);
                 const result = await importMediaFile(event, filePath);
                 results.push({ status: 'success', file: result });
+                console.log('[MediaManager] ✅ Import success:', filePath);
             } catch (error) {
+                console.error('[MediaManager] ❌ Import FAILED for:', filePath, '| Error:', error.message);
+                if (error.stack) console.error('[MediaManager] Stack:', error.stack);
                 results.push({ status: 'error', path: filePath, error: error.message });
             }
         }

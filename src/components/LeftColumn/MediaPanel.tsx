@@ -59,6 +59,7 @@ const MediaPanel: React.FC = () => {
 
     // Drag and drop
     const [draggedItem, setDraggedItem] = useState<{ type: 'media'; id: string } | null>(null);
+    const [importError, setImportError] = useState<string | null>(null);
 
     const toggleFolder = (folderId: string) => {
         toggleFolderExpansion(folderId);
@@ -163,6 +164,15 @@ const MediaPanel: React.FC = () => {
             const result = await window.electronAPI.importMedia(validPaths);
             console.log('[MediaPanel] Import result:', result);
 
+            // Check for errors in results
+            const errors = result.filter((r: any) => r.status === 'error');
+            if (errors.length > 0) {
+                const errorMsg = errors.map((e: any) => `${e.path ? e.path.split('\\').pop() : 'archivo'}: ${e.error}`).join('\n');
+                console.error('[MediaPanel] Import errors:', errorMsg);
+                setImportError(`Error al importar: ${errors[0].error}`);
+                setTimeout(() => setImportError(null), 6000);
+            }
+
             // Explicitly reload library after import to ensure UI updates
             // (in case the library-update event was lost due to timing/reload)
             if (window.electronAPI.getMediaLibrary) {
@@ -177,7 +187,7 @@ const MediaPanel: React.FC = () => {
                         url: `lumina-media://${f.path.replace(/\\/g, '/')}`,
                         type: f.type,
                         thumbnailUrl: f.thumbnail ? `lumina-media://${f.thumbnail.replace(/\\/g, '/')}` : undefined,
-                        folderId: f.folderId || existing?.folderId || 'general-media', // Backend might not store folderId yet? Trust backend if present.
+                        folderId: f.folderId || existing?.folderId || 'general-media',
                         scaling: f.scaling || existing?.scaling || 'contain',
                         isLooping: f.isLooping || existing?.isLooping || false
                     };
@@ -187,6 +197,8 @@ const MediaPanel: React.FC = () => {
             }
         } catch (e) {
             console.error('[MediaPanel] Import error:', e);
+            setImportError(`Error al importar: ${(e as any)?.message || 'Error desconocido'}`);
+            setTimeout(() => setImportError(null), 6000);
         }
 
         if (fileInputRef.current) {
@@ -218,26 +230,43 @@ const MediaPanel: React.FC = () => {
         const validPaths = paths.filter(p => !!p) as string[];
 
         if (validPaths.length > 0) {
-            await window.electronAPI.importMedia(validPaths);
+            try {
+                console.log('[MediaPanel] Drag-drop importing paths:', validPaths);
+                const result = await window.electronAPI.importMedia(validPaths);
+                console.log('[MediaPanel] Drag-drop import result:', result);
 
-            // Reload library after import
-            if (window.electronAPI.getMediaLibrary) {
-                const files = await window.electronAPI.getMediaLibrary();
-                const currentFiles = useStore.getState().mediaFiles;
-                const mappedFiles: MediaFile[] = files.map((f: any) => {
-                    const existing = currentFiles.find(curr => curr.id === f.id);
-                    return {
-                        id: f.id,
-                        name: f.name,
-                        url: `lumina-media://${f.path.replace(/\\/g, '/')}`,
-                        type: f.type,
-                        thumbnailUrl: f.thumbnail ? `lumina-media://${f.thumbnail.replace(/\\/g, '/')}` : undefined,
-                        folderId: f.folderId || existing?.folderId || 'general-media',
-                        scaling: f.scaling || existing?.scaling || 'contain',
-                        isLooping: f.isLooping || existing?.isLooping || false
-                    };
-                });
-                useStore.setState({ mediaFiles: mappedFiles });
+                // Check for errors in results
+                const errors = result.filter((r: any) => r.status === 'error');
+                if (errors.length > 0) {
+                    const errorMsg = errors.map((e: any) => `${e.path ? e.path.split('\\').pop() : 'archivo'}: ${e.error}`).join('\n');
+                    console.error('[MediaPanel] Drag-drop import errors:', errorMsg);
+                    setImportError(`Error al importar: ${errors[0].error}`);
+                    setTimeout(() => setImportError(null), 6000);
+                }
+
+                // Reload library after import
+                if (window.electronAPI.getMediaLibrary) {
+                    const files = await window.electronAPI.getMediaLibrary();
+                    const currentFiles = useStore.getState().mediaFiles;
+                    const mappedFiles: MediaFile[] = files.map((f: any) => {
+                        const existing = currentFiles.find(curr => curr.id === f.id);
+                        return {
+                            id: f.id,
+                            name: f.name,
+                            url: `lumina-media://${f.path.replace(/\\/g, '/')}`,
+                            type: f.type,
+                            thumbnailUrl: f.thumbnail ? `lumina-media://${f.thumbnail.replace(/\\/g, '/')}` : undefined,
+                            folderId: f.folderId || existing?.folderId || 'general-media',
+                            scaling: f.scaling || existing?.scaling || 'contain',
+                            isLooping: f.isLooping || existing?.isLooping || false
+                        };
+                    });
+                    useStore.setState({ mediaFiles: mappedFiles });
+                }
+            } catch (e) {
+                console.error('[MediaPanel] Drag-drop import error:', e);
+                setImportError(`Error al importar: ${(e as any)?.message || 'Error desconocido'}`);
+                setTimeout(() => setImportError(null), 6000);
             }
         }
     };
@@ -407,6 +436,19 @@ const MediaPanel: React.FC = () => {
                             style={{ width: `${conversionProgress.percent}%` }}
                         />
                     </div>
+                </div>
+            )}
+
+            {/* Import Error Banner */}
+            {importError && (
+                <div className="mb-4 bg-red-900/30 rounded-md p-3 border border-red-500/40 flex items-center justify-between">
+                    <span className="text-xs text-red-300">{importError}</span>
+                    <button
+                        onClick={() => setImportError(null)}
+                        className="text-red-400 hover:text-red-300 ml-2"
+                    >
+                        <X size={14} />
+                    </button>
                 </div>
             )}
 
