@@ -54,7 +54,7 @@
     "productName": "Lúmina",
     "icon": "LuminaICO.ico",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
       "electron/**/*",
