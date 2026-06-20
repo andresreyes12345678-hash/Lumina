@@ -129,6 +129,7 @@ interface Store {
         currentTime: number;
         duration: number;
         seekTime?: number;
+        seekTrigger?: number;
     };
     setVideoPlaybackState: (updates: Partial<Store['videoPlaybackState']>) => void;
     reportVideoStatus: (status: Partial<Store['videoPlaybackState']>) => void;
@@ -285,29 +286,28 @@ export const useStore = create<Store>((set, get) => ({
             return newState;
         });
     },
-
     syncStageDisplay: () => {
         const state = get();
         sendToStageDisplay(state.activeSlide, state.textLayerVisible, state.mediaLayerVisible);
     },
-
     videoPlaybackState: {
         isPlaying: true,
         isLooping: false,
         volume: 0.8,        // Default 80% — previously was 0 (silently muted)
         currentTime: 0,
         duration: 0,
-        seekTime: 0
+        seekTime: undefined,
+        seekTrigger: undefined
     },
 
     setVideoPlaybackState: (updates) => {
-        set((state) => ({
-            videoPlaybackState: { ...state.videoPlaybackState, ...updates }
-        }));
-
-        // Trigger IPC after state update
-        // const state = get();
-        // sendToStageDisplay(state.activeSlide, state.textLayerVisible, state.mediaLayerVisible);
+        set((state) => {
+            const nextState = { ...state.videoPlaybackState, ...updates };
+            if (updates.seekTime !== undefined) {
+                nextState.seekTrigger = Date.now();
+            }
+            return { videoPlaybackState: nextState };
+        });
 
         // DIRECT IPC SYNC (For instant response)
         if (window.electronAPI && window.electronAPI.sendVideoControl) {
@@ -851,6 +851,8 @@ export const useStore = create<Store>((set, get) => ({
                 ...state.videoPlaybackState,
                 isLooping: isLooping || false,
                 currentTime: 0,
+                seekTime: undefined,
+                seekTrigger: undefined,
                 isPlaying: true
             }
         }));

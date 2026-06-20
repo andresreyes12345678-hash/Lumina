@@ -59,18 +59,21 @@ const ScalableSlide: React.FC<ScalableSlideProps> = ({
     useLayoutEffect(() => {
         const updateScale = () => {
             if (containerRef.current) {
-// ... existing layout effect ...
                 let parentWidth = containerRef.current.clientWidth;
-                if (!parentWidth) {
+                let parentHeight = containerRef.current.clientHeight;
+                
+                if (!parentWidth || !parentHeight) {
                     const rect = containerRef.current.getBoundingClientRect();
                     parentWidth = rect.width;
+                    parentHeight = rect.height;
                 }
 
-                if (!parentWidth) {
-                    parentWidth = window.innerWidth;
-                }
+                if (!parentWidth) parentWidth = window.innerWidth;
+                if (!parentHeight) parentHeight = window.innerHeight;
 
-                const calculatedScale = parentWidth / BASE_WIDTH;
+                const scaleX = parentWidth / BASE_WIDTH;
+                const scaleY = parentHeight / BASE_HEIGHT;
+                const calculatedScale = Math.min(scaleX, scaleY);
 
                 if (Number.isFinite(calculatedScale) && calculatedScale > 0) {
                     setScale(calculatedScale);
@@ -220,6 +223,7 @@ interface VideoEngineProps {
         isPlaying: boolean;
         volume: number;
         seekTime?: number;
+        seekTrigger?: number;
     };
     onPlaybackUpdate?: (state: { currentTime: number; duration: number; isPlaying: boolean }) => void;
     muted?: boolean;
@@ -236,7 +240,7 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
     const isLoopingRef = useRef(isLooping); // Ref to avoid triggering video reload on loop change
 
     // Internal refs to track control state and avoid redundant calls
-    const lastSeekRef = useRef<number | undefined>(undefined);
+    const lastSeekTriggerRef = useRef<number | undefined>(undefined);
 
     // Keep the looping ref in sync with props, and update native video.loop attribute
     React.useEffect(() => {
@@ -270,7 +274,7 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
         setIsVisible(false);
         setIsFadingOut(false);
         setHasError(false);
-        lastSeekRef.current = undefined;
+        lastSeekTriggerRef.current = undefined;
 
         // Increment load ID to invalidate previous async attempts
         const currentLoadId = ++loadIdRef.current;
@@ -415,15 +419,12 @@ const VideoEngine: React.FC<VideoEngineProps> = ({ src, scaling, control, isLoop
             video.pause();
         }
 
-        // Seek — 0.5s threshold prevents micro-seeks from rounding errors
-        if (control.seekTime !== undefined &&
-            control.seekTime !== lastSeekRef.current &&
-            control.seekTime !== 0) {
-            if (Math.abs(video.currentTime - control.seekTime) > 0.5) {
-                video.currentTime = control.seekTime;
-                lastSeekRef.current = control.seekTime;
-                setIsFadingOut(false);
-            }
+        // Seek
+        if (control.seekTrigger !== undefined &&
+            control.seekTrigger !== lastSeekTriggerRef.current) {
+            video.currentTime = control.seekTime ?? 0;
+            lastSeekTriggerRef.current = control.seekTrigger;
+            setIsFadingOut(false);
         }
     }, [control]);
 
@@ -531,6 +532,7 @@ const arePropsEqual = (prev: ScalableSlideProps, next: ScalableSlideProps) => {
         if (prevControl?.isPlaying !== nextControl?.isPlaying) return false;
         if (prevControl?.isLooping !== nextControl?.isLooping) return false;
         if (prevControl?.seekTime !== nextControl?.seekTime) return false;
+        if (prevControl?.seekTrigger !== nextControl?.seekTrigger) return false;
         // Volume change?
         if (prevControl?.volume !== nextControl?.volume) return false;
     }

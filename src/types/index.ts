@@ -25,6 +25,7 @@ export interface Slide {
         isLooping: boolean;
         volume: number; // 0-1
         seekTime?: number; // timestamp to seek to
+        seekTrigger?: number; // timestamp to trigger seek
         timestamp?: number; // to force updates
         duration?: number;
         currentTime?: number;
