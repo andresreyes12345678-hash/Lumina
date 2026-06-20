@@ -6,7 +6,7 @@ import ScalableSlide from '../Shared/ScalableSlide';
 
 const LivePreview: React.FC = () => {
     const [previewSlide, setPreviewSlide] = useState<Slide | null>(null);
-    const { reportVideoStatus, isProjectionActive, toggleProjection } = useStore();
+    const { reportVideoStatus, isProjectionActive, toggleProjection, videoPlaybackState } = useStore();
 
     useEffect(() => {
         // Listen for preview updates from main process
@@ -61,6 +61,7 @@ const LivePreview: React.FC = () => {
                     slide={previewSlide}
                     onPlaybackUpdate={handlePlaybackUpdate}
                     muted={true}
+                    control={videoPlaybackState}
                 />
             </div>
         </div>

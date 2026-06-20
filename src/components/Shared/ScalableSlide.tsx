@@ -12,6 +12,7 @@ interface ScalableSlideProps {
     showBackground?: boolean;
     showText?: boolean;
     muted?: boolean;
+    control?: any; // Explicit control override
 }
 
 const BASE_WIDTH = 1920;
@@ -24,7 +25,8 @@ const ScalableSlide: React.FC<ScalableSlideProps> = ({
     onPlaybackUpdate,
     showBackground = true,
     showText = true,
-    muted = false
+    muted = false,
+    control
 }) => {
     // ... existing layout effect ...
     const containerRef = useRef<HTMLDivElement>(null);
@@ -133,8 +135,8 @@ const ScalableSlide: React.FC<ScalableSlideProps> = ({
                             <VideoEngine
                                 src={safeDisplayMedia}
                                 scaling={slide.backgroundScaling}
-                                control={slide.videoControl}
-                                isLooping={slide.videoControl?.isLooping ?? slide.isLooping ?? false}
+                                control={control || slide.videoControl}
+                                isLooping={control?.isLooping ?? slide.videoControl?.isLooping ?? slide.isLooping ?? false}
                                 onPlaybackUpdate={onPlaybackUpdate}
                                 muted={muted}
                             />
@@ -522,8 +524,8 @@ const arePropsEqual = (prev: ScalableSlideProps, next: ScalableSlideProps) => {
 
     // 5. Video Control Checks (Deep check to avoid unnecessary renders on playback ticks)
     // Only re-render if control state ACTUALLY changes in a meaningful way
-    const prevControl = prev.slide.videoControl;
-    const nextControl = next.slide.videoControl;
+    const prevControl = prev.control || prev.slide?.videoControl;
+    const nextControl = next.control || next.slide?.videoControl;
 
     if (prevControl !== nextControl) {
         if (prevControl?.isPlaying !== nextControl?.isPlaying) return false;
