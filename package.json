@@ -1,6 +1,6 @@
 {
   "name": "lumina",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Desktop presentation software for live events with instant triggering",
   "main": "electron/main.cjs",
   "type": "module",
@@ -69,6 +69,10 @@
         "to": "biblia",
         "filter": ["**/*"]
       }
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/ffprobe-static/**/*"
     ],
     "win": {
       "target": "nsis",

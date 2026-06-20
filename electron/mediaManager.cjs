@@ -14,6 +14,7 @@ try {
     if (!ffmpegPath) throw new Error('ffmpeg-static returned null/undefined');
     // Ensure it is a valid string
     if (typeof ffmpegPath !== 'string') throw new Error(`ffmpeg-static returned unexpected type: ${typeof ffmpegPath}`);
+    ffmpegPath = ffmpegPath.replace(/app\.asar/g, 'app.asar.unpacked');
     ffmpeg.setFfmpegPath(ffmpegPath);
     console.log('[MediaManager] FFmpeg path set:', ffmpegPath);
 } catch (e) {
@@ -24,6 +25,7 @@ try {
     const ffprobeStatic = require('ffprobe-static');
     ffprobePath = ffprobeStatic.path;
     if (!ffprobePath) throw new Error('ffprobe-static path is null/undefined');
+    ffprobePath = ffprobePath.replace(/app\.asar/g, 'app.asar.unpacked');
     ffmpeg.setFfprobePath(ffprobePath);
     console.log('[MediaManager] FFprobe path set:', ffprobePath);
 } catch (e) {
