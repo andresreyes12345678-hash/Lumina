@@ -269,7 +269,7 @@ export const useStore = create<Store>((set, get) => ({
     activeMediaSnapshot: null,
     
     // Default projection state. Wil be overridden if loaded from storage
-    isProjectionActive: true,
+    isProjectionActive: false,
 
     toggleProjection: () => {
         set((state) => {

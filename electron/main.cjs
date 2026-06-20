@@ -164,6 +164,7 @@ function createStageWindow() {
         alwaysOnTop: true, // Keep on top of everything
         skipTaskbar: true, // Hide from taskbar
         focusable: false, // Do not accept focus (passive display)
+        show: false, // Start hidden, let user trigger it
         type: 'toolbar', // Hide from Alt+Tab (Windows) / Mission Control (macOS) - check OS behavior
         icon: iconPath,
         webPreferences: {
