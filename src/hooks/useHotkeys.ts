@@ -22,7 +22,8 @@ export const useHotkeys = () => {
 
             // Ignore if typing in an input/textarea
             const target = event.target as HTMLElement;
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+            const tagName = target?.tagName?.toUpperCase();
+            if (tagName === 'INPUT' || tagName === 'TEXTAREA' || target?.isContentEditable) {
                 return;
             }
 

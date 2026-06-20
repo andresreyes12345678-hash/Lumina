@@ -49,18 +49,23 @@ const SongImportModal: React.FC<SongImportModalProps> = ({
             // New song mode: reset fields
             setTitle('');
             setLyrics('');
-            if (songFolders.length > 0) {
-                setFolderId(songFolders[0].id);
+            const folders = useStore.getState().songFolders;
+            if (folders.length > 0) {
+                setFolderId(folders[0].id);
             }
 
             // Auto-paste from clipboard
-            navigator.clipboard.readText().then(text => {
-                if (text && text.trim().length > 0) {
-                    setLyrics(text);
-                }
-            }).catch(console.warn);
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                navigator.clipboard.readText().then(text => {
+                    if (text && text.trim().length > 0) {
+                        setLyrics(text);
+                    }
+                }).catch(err => {
+                    console.warn('[SongImportModal] Clipboard access failed:', err);
+                });
+            }
         }
-    }, [isOpen, songFolders, isEditMode, initialText, initialTitle, editSongId]);
+    }, [isOpen, isEditMode, initialText, initialTitle, editSongId]);
 
     const handleSave = () => {
         if (!title.trim() || !lyrics.trim()) return;
