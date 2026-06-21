@@ -194,10 +194,15 @@ const SongsPanel: React.FC = () => {
     });
 
     // Group by folder
-    const songsByFolder = sortedFolders.map(folder => ({
-        ...folder,
-        songs: filteredSongs.filter(s => s.folderId === folder.id)
-    })).filter(folder => folder.songs.length > 0 || searchQuery === '');
+    const songsByFolder = sortedFolders.map(folder => {
+        const folderSongs = filteredSongs.filter(s => s.folderId === folder.id);
+        // Sort songs alphabetically
+        folderSongs.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
+        return {
+            ...folder,
+            songs: folderSongs
+        };
+    }).filter(folder => folder.songs.length > 0 || searchQuery === '');
 
     // Close context menu on click
     React.useEffect(() => {

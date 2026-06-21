@@ -75,7 +75,7 @@ const SongImportModal: React.FC<SongImportModalProps> = ({
 
         // Use preserved styles in edit mode, defaults for new songs
         const slideFont = preservedStyles?.fontFamily || 'Poppins';
-        const slideSize = preservedStyles?.fontSize || 64;
+        const slideSize = preservedStyles?.fontSize || 109;
 
         // Build a pool of existing types to preserve anchors (Verse 1, Chorus, etc.)
         const pendingTypes = originalSlides?.filter(s => s.type).map(s => ({

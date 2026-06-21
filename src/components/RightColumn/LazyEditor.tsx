@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store/useStore';
-import { Save, X, Upload } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 
 const LazyEditor: React.FC = () => {
-    const { editingSlideId, slides, songs, selectedSongId, updateSlide, stopEditing, addSlides } = useStore();
+    const { editingSlideId, slides, songs, selectedSongId, updateSlide, stopEditing } = useStore();
 
     // Correctly find the slide whether it's in a Song or in the direct slides array
     const editingSlide = React.useMemo(() => {
@@ -48,33 +48,6 @@ const LazyEditor: React.FC = () => {
         stopEditing();
     };
 
-    const handleImportFromClipboard = async () => {
-        try {
-            const text = await navigator.clipboard.readText();
-            if (!text) return;
-
-            // Show confirmation
-            const shouldImport = confirm('¿Importar texto y crear nuevas diapositivas?');
-            if (!shouldImport) return;
-
-            // Parse text into slides (split by double line breaks)
-            const paragraphs = text.split(/\n\s*\n/);
-            const newSlides = paragraphs
-                .filter(p => p.trim().length > 0)
-                .map((slideContent, index) => ({
-                    id: `slide-${Date.now()}-${index}`,
-                    content: slideContent.trim(),
-                    fontFamily: 'Open Sans',
-                    fontSize: 64
-                }));
-
-            addSlides(newSlides);
-            stopEditing();
-        } catch (error) {
-            alert('No se pudo acceder al portapapeles. Pega el texto manualmente.');
-        }
-    };
-
     return (
         <div className="p-4 flex-1 flex flex-col border-t border-gray-700">
             <div className="flex items-center justify-between mb-3">
@@ -101,13 +74,6 @@ const LazyEditor: React.FC = () => {
                 >
                     <Save size={16} />
                     Guardar
-                </button>
-                <button
-                    onClick={handleImportFromClipboard}
-                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm"
-                >
-                    <Upload size={16} />
-                    Importar
                 </button>
             </div>
         </div>
