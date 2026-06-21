@@ -80,7 +80,8 @@ class DataManager {
                     const tempPath = this.dbPath + '.tmp';
 
                     await new Promise((resolve, reject) => {
-                        const json = JSON.stringify(data, null, 2);
+                        // Check if data is already a string (from our frontend optimization)
+                        const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
                         // safeLog('[DataManager] Payload size:', json.length, 'bytes'); // Commented out to reduce noise/risk
 
                         fs.writeFile(tempPath, json, (err) => {

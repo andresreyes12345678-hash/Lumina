@@ -224,22 +224,21 @@ const saveToLocalStorage = (data: any) => {
     console.log('[Store] saveToLocalStorage triggered');
     const { isLoaded, ...payload } = data; // Don't save the internal flag
 
-    // SANITIZATION: Deep clone to strip non-serializable objects (like Proxies, Files, DOM nodes)
-    // This prevents "Object could not be cloned" errors in Electron IPC
-    let cleanPayload;
+    // STRINGIFY ON FRONTEND to avoid Structured Clone Algorithm blocking
+    let cleanPayloadStr;
     try {
-        cleanPayload = JSON.parse(JSON.stringify(payload));
+        cleanPayloadStr = JSON.stringify(payload, null, 2);
     } catch (err) {
         console.error('[Store] CRITICAL: Data format error - Object not serializable:', err);
         return;
     }
 
     if (window.electronAPI?.saveData) {
-        window.electronAPI.saveData(cleanPayload)
+        window.electronAPI.saveData(cleanPayloadStr)
             .then(() => console.log('[Store] Save to Electron acknowledged'))
             .catch((err: any) => console.error('[Store] Save failed:', err));
     } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanPayload));
+        localStorage.setItem(STORAGE_KEY, cleanPayloadStr);
     }
 };
 
