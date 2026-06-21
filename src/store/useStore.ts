@@ -107,8 +107,10 @@ interface Store {
         chapter: string;
         lastVerse: string;
         searchQuery: string;
+        customChapterStyles?: Record<string, { fontSize?: number; fontFamily?: string }>;
     };
     setBibleState: (updates: Partial<Store['bibleState']>) => void;
+    updateBibleSlides: (updates: Partial<Slide>) => void;
 
     // Songs State Persistence
     songsState: {
@@ -367,6 +369,7 @@ export const useStore = create<Store>((set, get) => ({
                 chapter:     merged.chapter     || '',
                 lastVerse:   merged.lastVerse   || '',
                 searchQuery: merged.searchQuery || '',
+                customChapterStyles: merged.customChapterStyles || {},
             };
             const newState = { bibleState: newBibleState };
             
@@ -375,6 +378,27 @@ export const useStore = create<Store>((set, get) => ({
             if (!isOnlySearchQuery) {
                 saveToLocalStorage({ ...state, ...newState });
             }
+            return newState;
+        });
+    },
+
+    updateBibleSlides: (updates) => {
+        set((state) => {
+            const newSlides = state.slides.map(s => ({ ...s, ...updates }));
+            
+            const newBibleState = { ...state.bibleState };
+            if (!newBibleState.customChapterStyles) newBibleState.customChapterStyles = {};
+            
+            const chapterKey = `${state.bibleState.book}-${state.bibleState.chapter}`;
+            const currentStyles = newBibleState.customChapterStyles[chapterKey] || {};
+            
+            newBibleState.customChapterStyles[chapterKey] = {
+                ...currentStyles,
+                ...updates
+            };
+            
+            const newState = { slides: newSlides, bibleState: newBibleState };
+            saveToLocalStorage({ ...state, ...newState });
             return newState;
         });
     },
@@ -636,6 +660,16 @@ export const useStore = create<Store>((set, get) => ({
                     )
                 });
             }
+        }
+
+        // 2. Fallback: Update in global slides (Bible / Quick Slides)
+        const { slides } = get();
+        if (slides.some(s => s.id === id)) {
+            set({
+                slides: slides.map(slide =>
+                    slide.id === id ? { ...slide, ...updates } : slide
+                )
+            });
         }
 
         // REMOVED: Live State update. Editing should NEVER affect the live "Active Slide". 

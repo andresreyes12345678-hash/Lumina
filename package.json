@@ -1,6 +1,6 @@
 {
   "name": "lumina",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Desktop presentation software for live events with instant triggering",
   "main": "electron/main.cjs",
   "type": "module",

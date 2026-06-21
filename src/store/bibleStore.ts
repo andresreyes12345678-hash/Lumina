@@ -138,14 +138,20 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
 
         const chapter = currentBookData.chapters.find(c => c.number === chapterNum);
 
+        const bibleState = useStore.getState().bibleState;
+        const chapterKey = `${currentBookData.book}-${chapterNum}`;
+        const customStyle = bibleState.customChapterStyles?.[chapterKey];
+        const fontFam = customStyle?.fontFamily || 'Poppins';
+        const fontSz = customStyle?.fontSize || 80;
+
         if (!chapter) {
             console.warn(`[bibleStore] Capítulo ${chapterNum} no encontrado en "${currentBookData.book}".`);
             useStore.setState({
                 slides: [{
                     id:         `bible-empty-${chapterNum}`,
                     content:    `${currentBookData.book} ${chapterNum}\n\n[Capítulo no disponible]`,
-                    fontFamily: 'Poppins',
-                    fontSize:   48,
+                    fontFamily: fontFam,
+                    fontSize:   fontSz,
                     type:       'bible' as const,
                 }]
             });
@@ -160,8 +166,8 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
         const slides: Slide[] = chapter.verses.map(v => ({
             id:         `bible-${currentBookData.book}-${chapterNum}-v${v.number}`,
             content:    `${currentBookData.book} ${chapterNum}:${v.number}\n\n${v.text}`,
-            fontFamily: 'Poppins',
-            fontSize:   56,
+            fontFamily: fontFam,
+            fontSize:   fontSz,
             type:       'bible' as const,
         }));
 

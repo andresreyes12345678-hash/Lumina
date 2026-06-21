@@ -120,7 +120,11 @@ const PropertiesPanel: React.FC = () => {
                 updateSong(selectedSongId, { slides: newSlides });
             } else {
                 // Fallback for non-song slides
-                updateSlide(resolvedSlide!.id, updates);
+                if (resolvedSlide!.type === 'bible' && useStore.getState().updateBibleSlides) {
+                    useStore.getState().updateBibleSlides(updates);
+                } else {
+                    updateSlide(resolvedSlide!.id, updates);
+                }
             }
         }
     };
