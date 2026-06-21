@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../../store/useStore';
 import SlideCard from './SlideCard';
 import { Slide, SlideType, TYPE_LABELS } from '../../types';
-import { Plus, Upload, Book, Music, RefreshCw } from 'lucide-react';
+import { Plus, Upload, Book, Music, RefreshCw, CheckSquare, Layers } from 'lucide-react';
 import SongImportModal from '../Modals/SongImportModal';
 
 const ProductionGrid: React.FC = () => {
@@ -17,9 +17,12 @@ const ProductionGrid: React.FC = () => {
         toggleSlideSelection,
         clearSlideSelection,
         setSlideSelection,
-        setActiveSlide
+        setActiveSlide,
+        updateBibleSlides,
+        updateSlide
     } = useStore();
 
+    const [contextMenuEditScope, setContextMenuEditScope] = useState<'selection' | 'all'>('selection');
     const [showContextMenu, setShowContextMenu] = useState(false);
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
     const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null); // For context menu
@@ -178,8 +181,9 @@ const ProductionGrid: React.FC = () => {
         }
 
         // Calculate safe position
+        const isBible = slides.find(s => s.id === slideId)?.type === 'bible';
         const menuWidth = 220;
-        const menuHeight = 550;
+        const menuHeight = isBible ? 160 : 550;
         let x = e.clientX;
         let y = e.clientY;
 
@@ -448,8 +452,83 @@ const ProductionGrid: React.FC = () => {
                 >
                     {/* Check if slide is Bible type */}
                     {slides.find(s => s.id === selectedSlideId)?.type === 'bible' ? (
-                        <div className="px-3 py-2 text-xs text-yellow-500 italic text-center border-b border-gray-700 mb-1">
-                            Diapositiva Bíblica<br />(Edición restringida)
+                        <div className="px-3 py-2">
+                            <div className="text-xs text-yellow-500 italic text-center border-b border-gray-700 mb-2 pb-1">
+                                Diapositiva Bíblica<br />(Edición de Fuente)
+                            </div>
+                            
+                            {/* Scope Selector */}
+                            <div className="flex items-center justify-between px-1 mb-3 mt-2">
+                                <span className="text-[10px] text-gray-400 uppercase tracking-wider">Ámbito</span>
+                                <div className="flex bg-zinc-900 rounded p-0.5 border border-gray-700">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setContextMenuEditScope('selection'); }}
+                                        className={`py-1 px-3 rounded text-[10px] flex items-center gap-1.5 transition-all ${contextMenuEditScope === 'selection'
+                                            ? 'bg-cyan-600 text-white'
+                                            : 'text-gray-500 hover:text-gray-300'
+                                            }`}
+                                    >
+                                        <CheckSquare size={10} />
+                                        1
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setContextMenuEditScope('all'); }}
+                                        className={`py-1 px-3 rounded text-[10px] flex items-center gap-1.5 transition-all ${contextMenuEditScope === 'all'
+                                            ? 'bg-cyan-600 text-white'
+                                            : 'text-gray-500 hover:text-gray-300'
+                                            }`}
+                                    >
+                                        <Layers size={10} />
+                                        Todo
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Font Size Control */}
+                            <div className="px-1 mb-2">
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-xs text-gray-400">Tamaño</label>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="range"
+                                        min="12"
+                                        max="200"
+                                        step="2"
+                                        value={slides.find(s => s.id === selectedSlideId)?.fontSize || 80}
+                                        onChange={(e) => {
+                                            const size = parseInt(e.target.value);
+                                            if (!isNaN(size)) {
+                                                if (contextMenuEditScope === 'selection' && selectedSlideId) {
+                                                    updateSlide(selectedSlideId, { fontSize: size });
+                                                } else if (contextMenuEditScope === 'all' && updateBibleSlides) {
+                                                    updateBibleSlides({ fontSize: size });
+                                                }
+                                            }
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    />
+                                    <input
+                                        type="number"
+                                        value={slides.find(s => s.id === selectedSlideId)?.fontSize || 80}
+                                        onChange={(e) => {
+                                            const size = parseInt(e.target.value);
+                                            if (!isNaN(size)) {
+                                                if (contextMenuEditScope === 'selection' && selectedSlideId) {
+                                                    updateSlide(selectedSlideId, { fontSize: size });
+                                                } else if (contextMenuEditScope === 'all' && updateBibleSlides) {
+                                                    updateBibleSlides({ fontSize: size });
+                                                }
+                                            }
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        min="12"
+                                        max="200"
+                                        className="w-14 px-1 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-gray-100 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     ) : (
                         <>
