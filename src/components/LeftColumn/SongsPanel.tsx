@@ -174,12 +174,18 @@ const SongsPanel: React.FC = () => {
         setDraggedItem(null);
     };
 
+    // Helper to normalize strings (remove accents/diacritics and make lowercase)
+    const normalizeString = (str: string) => {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    };
+
     // Filter songs by search query
     const filteredSongs = songs.filter(song => {
-        const query = searchQuery.toLowerCase();
-        const lyricsText = song.slides.map(s => s.content).join(' ').toLowerCase();
+        const query = normalizeString(searchQuery);
+        const titleText = normalizeString(song.title);
+        const lyricsText = normalizeString(song.slides.map(s => s.content).join(' '));
         return (
-            song.title.toLowerCase().includes(query) ||
+            titleText.includes(query) ||
             lyricsText.includes(query)
         );
     });

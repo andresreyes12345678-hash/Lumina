@@ -284,8 +284,32 @@ const BiblePanel: React.FC = () => {
                         </p>
 
                         {searchResults.map((r, i) => {
-                            const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                            const parts   = r.text.split(new RegExp(`(${escaped})`, 'gi'));
+                            const highlightMatch = (text: string, query: string) => {
+                                if (!query) return <span>{text}</span>;
+                                const nText = normalize(text);
+                                const nQuery = normalize(query);
+                                const parts = [];
+                                let currentIndex = 0;
+                                
+                                while (currentIndex < text.length) {
+                                    const matchIndex = nText.indexOf(nQuery, currentIndex);
+                                    if (matchIndex === -1) {
+                                        parts.push(<span key={currentIndex}>{text.slice(currentIndex)}</span>);
+                                        break;
+                                    }
+                                    if (matchIndex > currentIndex) {
+                                        parts.push(<span key={currentIndex}>{text.slice(currentIndex, matchIndex)}</span>);
+                                    }
+                                    parts.push(
+                                        <mark key={`mark-${matchIndex}`} className="bg-yellow-500/30 text-yellow-200 rounded-sm">
+                                            {text.slice(matchIndex, matchIndex + query.length)}
+                                        </mark>
+                                    );
+                                    currentIndex = matchIndex + query.length;
+                                }
+                                return parts;
+                            };
+
                             return (
                                 <div
                                     key={i}
@@ -294,11 +318,7 @@ const BiblePanel: React.FC = () => {
                                 >
                                     <p className="text-[10px] font-bold text-blue-400 mb-1">{r.reference}</p>
                                     <p className="text-[11px] text-gray-300 leading-snug line-clamp-3">
-                                        {parts.map((p: string, j: number) =>
-                                            p.toLowerCase() === searchQuery.toLowerCase()
-                                                ? <mark key={j} className="bg-yellow-500/30 text-yellow-200 rounded-sm">{p}</mark>
-                                                : <span key={j}>{p}</span>
-                                        )}
+                                        {highlightMatch(r.text, searchQuery)}
                                     </p>
                                 </div>
                             );
