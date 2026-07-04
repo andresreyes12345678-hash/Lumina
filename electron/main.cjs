@@ -124,6 +124,7 @@ function createControlWindow() {
             splashWindow.close();
         }
         
+        controlWindow.maximize();
         controlWindow.show();
         controlWindow.focus();
     };

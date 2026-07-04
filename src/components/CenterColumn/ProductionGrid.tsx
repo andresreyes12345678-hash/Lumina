@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useStore } from '../../store/useStore';
 import SlideCard from './SlideCard';
 import { Slide, SlideType, TYPE_LABELS } from '../../types';
-import { Plus, Upload, Book, Music, RefreshCw, CheckSquare, Layers } from 'lucide-react';
+import { Plus, Upload, Book, Music, RefreshCw, CheckSquare, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import SongImportModal from '../Modals/SongImportModal';
+import { useBibleStore } from '../../store/bibleStore';
 
 const ProductionGrid: React.FC = () => {
     const {
@@ -40,6 +41,26 @@ const ProductionGrid: React.FC = () => {
     } | null>(null);
 
     const { activeTab, contentSource, bibleState } = useStore();
+    const { loadChapter, currentBookData } = useBibleStore();
+
+    const handlePrevChapter = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!bibleState.chapter) return;
+        const currentNum = parseInt(bibleState.chapter);
+        if (currentNum > 1) {
+            loadChapter(currentNum - 1);
+        }
+    };
+
+    const handleNextChapter = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!bibleState.chapter || !currentBookData) return;
+        const currentNum = parseInt(bibleState.chapter);
+        const maxChapter = currentBookData.chapters?.length || 1;
+        if (currentNum < maxChapter) {
+            loadChapter(currentNum + 1);
+        }
+    };
 
     // Get current slides based on Active Tab or Content Source
     // If activeTab is 'media', we fall back to contentSource ('songs' or 'bible')
@@ -442,6 +463,29 @@ const ProductionGrid: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {effectiveTab === 'bible' && bibleState.book && slides.length > 0 && (
+                <div className="p-3 border-t border-gray-800 bg-zinc-900/50 flex justify-center gap-4">
+                    <button
+                        onClick={handlePrevChapter}
+                        disabled={parseInt(bibleState.chapter || '1') <= 1}
+                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 hover:text-white transition-colors"
+                        title="Capítulo Anterior"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                        <span className="text-sm font-medium">Anterior</span>
+                    </button>
+                    <button
+                        onClick={handleNextChapter}
+                        disabled={!currentBookData || parseInt(bibleState.chapter || '1') >= (currentBookData.chapters?.length || 1)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 hover:text-white transition-colors"
+                        title="Siguiente Capítulo"
+                    >
+                        <span className="text-sm font-medium">Siguiente</span>
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
 
             {/* Context Menu */}
             {showContextMenu && (
