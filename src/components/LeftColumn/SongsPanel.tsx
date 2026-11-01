@@ -110,7 +110,7 @@ const SongsPanel: React.FC = () => {
 
         if (songsInFolder.length > 0) {
             const confirmDelete = window.confirm(
-                `¿Eliminar carpeta "${folder?.name}" y sus ${songsInFolder.length} canciones?`
+                `¿Eliminar la carpeta "${folder?.name}"?\nLas ${songsInFolder.length} canciones dentro de ella no se eliminarán, se moverán a la carpeta General.`
             );
             if (!confirmDelete) return;
         }
@@ -378,6 +378,20 @@ const SongsPanel: React.FC = () => {
                             >
                                 Eliminar
                             </button>
+                            <div className="border-t border-gray-700 my-1" />
+                            <div className="px-4 py-1 text-xs text-gray-500 font-semibold uppercase">Mover a...</div>
+                            {songFolders.filter(f => f.id !== songs.find(s => s.id === contextMenu.id)?.folderId).map(f => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => {
+                                        updateSong(contextMenu.id, { folderId: f.id });
+                                        closeContextMenu();
+                                    }}
+                                    className="w-full text-left px-4 py-1 hover:bg-gray-700 text-sm text-gray-300 truncate"
+                                >
+                                    ↳ {f.name}
+                                </button>
+                            ))}
                         </>
                     )}
                 </div>

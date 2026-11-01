@@ -5,19 +5,6 @@ import { FileText, Image as ImageIcon, Power } from 'lucide-react';
 const ControlPanel: React.FC = () => {
     const { activeSlide, setActiveSlide, mediaLayerVisible, clearMediaLayer, blackout, textLayerVisible } = useStore();
 
-    // Logic: Clear Active Slide (Deselects and removes border)
-    const handleClearSelection = () => {
-        setActiveSlide(null);
-    };
-
-    const handleMediaToggle = () => {
-        clearMediaLayer();
-    };
-
-    const handleBlackout = () => {
-        blackout();
-    };
-
     const isBlackout = !textLayerVisible && !mediaLayerVisible;
 
     // Unified Styles
@@ -25,7 +12,6 @@ const ControlPanel: React.FC = () => {
     const activeBtnClass = "bg-zinc-100 border-white text-zinc-900 shadow-[0_0_10px_rgba(255,255,255,0.3)]";
     const inactiveBtnClass = "bg-zinc-800 border-zinc-700 text-zinc-500 hover:bg-zinc-750 hover:text-zinc-400";
 
-    // Status checks
     // Visible only if we have a slide AND the text layer is actually visible.
     // This ensures that if we hit Blackout, this button looks "OFF" too.
     const isSlideActive = !!activeSlide && textLayerVisible;
@@ -35,7 +21,7 @@ const ControlPanel: React.FC = () => {
             <div className="flex gap-0">
                 {/* 1. Clear Slide (Text/Content) */}
                 <button
-                    onClick={handleClearSelection}
+                    onClick={() => setActiveSlide(null)}
                     className={`
                         ${baseBtnClass} rounded-l-lg border-r-0 h-9
                         ${isSlideActive ? activeBtnClass : inactiveBtnClass}
@@ -50,7 +36,7 @@ const ControlPanel: React.FC = () => {
 
                 {/* 2. Background Toggle */}
                 <button
-                    onClick={handleMediaToggle}
+                    onClick={clearMediaLayer}
                     className={`
                         ${baseBtnClass} border-r-0 h-9
                         ${mediaLayerVisible ? activeBtnClass : inactiveBtnClass}
@@ -65,7 +51,7 @@ const ControlPanel: React.FC = () => {
 
                 {/* 3. Blackout */}
                 <button
-                    onClick={handleBlackout}
+                    onClick={blackout}
                     className={`
                         ${baseBtnClass} rounded-r-lg h-9
                         ${isBlackout ? activeBtnClass : inactiveBtnClass}
@@ -83,3 +69,4 @@ const ControlPanel: React.FC = () => {
 };
 
 export default ControlPanel;
+

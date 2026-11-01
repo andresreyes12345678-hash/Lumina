@@ -10,6 +10,7 @@ import RecentBibleHistory from '../components/RightColumn/RecentBibleHistory';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { useStore } from '../store/useStore';
 import UpdateNotification from '../components/Shared/UpdateNotification';
+import SettingsModal from '../components/Modals/SettingsModal';
 
 const ControlWindow: React.FC = () => {
     // Activate global hotkeys
@@ -114,6 +115,7 @@ const ControlWindow: React.FC = () => {
             </div>
             
             <UpdateNotification />
+            <SettingsModal />
         </div>
     );
 };

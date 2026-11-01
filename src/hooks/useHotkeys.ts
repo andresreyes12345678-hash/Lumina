@@ -42,11 +42,8 @@ export const useHotkeys = () => {
 
             if (key === 'backspace') {
                 event.preventDefault();
-                // Blackout
-                if (window.electronAPI) {
-                    window.electronAPI.blackout();
-                }
-                setActiveSlide(null);
+                // Usa blackout() del store que coordina capas y IPC internamente
+                useStore.getState().blackout();
                 return;
             }
 

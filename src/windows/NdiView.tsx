@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Slide } from '../types';
 import ScalableSlide from '../components/Shared/ScalableSlide';
+import { useTextTransition } from '../hooks/useTextTransition';
 
 const NdiView: React.FC = () => {
-    const [textSlide, setTextSlide] = useState<Slide | null>(null);
-    const [isTextVisible, setIsTextVisible] = useState(false);
+    const { textSlide, isTextVisible, updateText } = useTextTransition();
     
-    // To minimize CPU usage, NDI should only capture when the screen is actually changing.
-    // The main process will respond to these events.
+    // Notifica al proceso principal si hay animaciones en curso para optimizar captura NDI
     const notifyMainProcess = (isAnimating: boolean) => {
         if (window.electronAPI && (window.electronAPI as any).notifyNdiAnimation) {
             (window.electronAPI as any).notifyNdiAnimation(isAnimating);
@@ -18,42 +17,18 @@ const NdiView: React.FC = () => {
         if (!window.electronAPI) return;
 
         const handleUpdate = (newSlide: Slide | null) => {
-            setTextSlide(currentText => {
-                const hasContentChanged = (newSlide?.content !== currentText?.content);
-                const hasFontChanged = (
-                    newSlide?.fontFamily !== currentText?.fontFamily ||
-                    newSlide?.fontSize !== currentText?.fontSize
-                );
-                const isClear = !newSlide?.content;
+            // Avisa al Main Process que empieza una transición (captura NDI)
+            notifyMainProcess(true);
 
-                if (!hasContentChanged && !hasFontChanged && !isClear) {
-                    return newSlide; // Visually identical
-                }
+            updateText(newSlide);
 
-                // 1. We are about to start a transition! Tell main process to start capturing frames.
-                notifyMainProcess(true);
-                setIsTextVisible(false);
-
-                // 2. Swap & Fade In
-                setTimeout(() => {
-                    setTextSlide(newSlide);
-                    if (!isClear) {
-                        requestAnimationFrame(() => setIsTextVisible(true));
-                    }
-                    
-                    // Stop capturing 400ms after the fade in finishes to allow the transition to complete
-                    setTimeout(() => {
-                        notifyMainProcess(false);
-                    }, 400); 
-
-                }, 200);
-
-                return currentText;
-            });
+            // Para captura NDI: detener 400ms después del fade-in
+            const speed = newSlide?.transitionSpeed || 200;
+            setTimeout(() => notifyMainProcess(false), speed + 400);
         };
 
         window.electronAPI.onUpdateStage(handleUpdate);
-    }, []);
+    }, [updateText]);
 
     // Ensure body is transparent (though it should be via HTML/CSS already)
     useEffect(() => {

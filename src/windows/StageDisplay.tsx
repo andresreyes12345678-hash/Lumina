@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Slide } from '../types';
 import ScalableSlide from '../components/Shared/ScalableSlide';
+import { useTextTransition } from '../hooks/useTextTransition';
 
 const StageDisplay: React.FC = () => {
     // --- BACKGROUND BUFFER (CROSS-FADE) ---
@@ -13,12 +14,8 @@ const StageDisplay: React.FC = () => {
         zIndex: number;
     }[]>([]);
 
-    // --- TEXT STATE (SEQUENTIAL FADE) ---
-    // User Requirement: "Exit Before Enter"
-    // 1. Fade Out (200ms) -> 2. Switch Content -> 3. Fade In (200ms)
-    const [textSlide, setTextSlide] = useState<Slide | null>(null);
-    const [isTextVisible, setIsTextVisible] = useState(false);
-    const textTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // --- TEXT STATE (SEQUENTIAL FADE via useTextTransition hook) ---
+    const { textSlide, isTextVisible, transitionConfig, updateText } = useTextTransition();
 
     // --- DECOUPLED STATE ---
     const currentBgTimestamp = useRef<number>(0);
@@ -117,38 +114,8 @@ const StageDisplay: React.FC = () => {
                 });
             });
 
-            // --- 2. TEXT UPDATE LOGIC (Dependent on Content) ---
-            setTextSlide(currentText => {
-                // Check visual differences for TEXT only
-                const hasContentChanged = (newSlide?.content !== currentText?.content);
-                const hasFontChanged = (
-                    newSlide?.fontFamily !== currentText?.fontFamily ||
-                    newSlide?.fontSize !== currentText?.fontSize
-                );
-                const isClear = !newSlide?.content;
-
-                // Optimization: If text is visually identical, do not trigger fade-out/in
-                if (!hasContentChanged && !hasFontChanged && !isClear) {
-                    // Update object but keep same visual state
-                    return newSlide;
-                }
-
-                if (textTimeoutRef.current) clearTimeout(textTimeoutRef.current);
-
-                // Step 1: Fade Out
-                setIsTextVisible(false);
-
-                // Step 2: Swap & Fade In
-                textTimeoutRef.current = setTimeout(() => {
-                    setTextSlide(newSlide);
-                    // Fade In only if we have content
-                    if (!isClear) {
-                        requestAnimationFrame(() => setIsTextVisible(true));
-                    }
-                }, 200); // 200ms exit time
-
-                return currentText; // Keep showing old text during fade out
-            });
+            // --- 2. TEXT UPDATE LOGIC (via shared useTextTransition hook) ---
+            updateText(newSlide);
         };
 
         const cleanup = window.electronAPI.onUpdateStage(handleUpdate);
@@ -200,7 +167,12 @@ const StageDisplay: React.FC = () => {
                 style={{
                     zIndex: 9999, // Ensure text is always on top
                     opacity: isTextVisible ? 1 : 0,
-                    transition: 'opacity 200ms ease-in-out'
+                    transform: transitionConfig.type === 'zoom' 
+                        ? (isTextVisible ? 'scale(1)' : 'scale(0.95)') 
+                        : transitionConfig.type === 'slide' 
+                            ? (isTextVisible ? 'translateY(0)' : 'translateY(30px)') 
+                            : 'none',
+                    transition: `all ${transitionConfig.speed}ms cubic-bezier(0.4, 0, 0.2, 1)`
                 }}
             >
                 {/* Render ONLY Text */}

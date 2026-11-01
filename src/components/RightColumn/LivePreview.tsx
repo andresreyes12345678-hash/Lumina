@@ -3,19 +3,22 @@ import { Slide } from '../../types';
 import { Monitor } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import ScalableSlide from '../Shared/ScalableSlide';
+import { useTextTransition } from '../../hooks/useTextTransition';
 
 const LivePreview: React.FC = () => {
     const [previewSlide, setPreviewSlide] = useState<Slide | null>(null);
+    const { textSlide, isTextVisible, transitionConfig, updateText } = useTextTransition();
+
     const { reportVideoStatus, isProjectionActive, toggleProjection, videoPlaybackState } = useStore();
 
     useEffect(() => {
-        // Listen for preview updates from main process
         if (window.electronAPI) {
             window.electronAPI.onUpdatePreview((slideData) => {
                 setPreviewSlide(slideData);
+                updateText(slideData);
             });
         }
-    }, []);
+    }, [updateText]);
 
     const handlePlaybackUpdate = (state: { currentTime: number; duration: number; isPlaying: boolean }) => {
         // Report status to store WITHOUT triggering IPC loop
@@ -56,13 +59,37 @@ const LivePreview: React.FC = () => {
 
             {/* 16:9 Preview Box */}
             <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border-2 border-gray-700 relative group">
-                {/* muted={true}: Audio plays ONLY from the Stage (projection) window, never from preview */}
-                <ScalableSlide
-                    slide={previewSlide}
-                    onPlaybackUpdate={handlePlaybackUpdate}
-                    muted={true}
-                    control={videoPlaybackState}
-                />
+                <div className="absolute inset-0 w-full h-full">
+                    {/* Background layer directly tied to previewSlide */}
+                    <ScalableSlide
+                        slide={previewSlide}
+                        showText={false}
+                        onPlaybackUpdate={handlePlaybackUpdate}
+                        muted={true}
+                        control={videoPlaybackState}
+                    />
+                </div>
+                
+                <div 
+                    className="absolute inset-0 w-full h-full"
+                    style={{
+                        zIndex: 10,
+                        opacity: isTextVisible ? 1 : 0,
+                        transform: transitionConfig.type === 'zoom' 
+                            ? (isTextVisible ? 'scale(1)' : 'scale(0.95)') 
+                            : transitionConfig.type === 'slide' 
+                                ? (isTextVisible ? 'translateY(0)' : 'translateY(30px)') 
+                                : 'none',
+                        transition: `all ${transitionConfig.speed}ms cubic-bezier(0.4, 0, 0.2, 1)`
+                    }}
+                >
+                    <ScalableSlide
+                        slide={textSlide}
+                        showBackground={false}
+                        muted={true}
+                        control={videoPlaybackState}
+                    />
+                </div>
             </div>
         </div>
     );

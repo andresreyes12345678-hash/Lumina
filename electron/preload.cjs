@@ -7,7 +7,6 @@ try {
     contextBridge.exposeInMainWorld('electronAPI', {
         // Triggering
         triggerSlide: (slideData) => ipcRenderer.send('trigger-slide', slideData),
-        blackout: () => ipcRenderer.send('blackout'),
         
         // Window Control
         toggleProjection: () => ipcRenderer.send('toggle-projection'),
@@ -81,6 +80,13 @@ try {
         // Persistence
         saveData: (data) => ipcRenderer.invoke('data:save', data),
         loadData: () => ipcRenderer.invoke('data:load'),
+        // Flush-before-close handshake (main pide guardar y espera confirmación)
+        onFlushRequest: (callback) => {
+            const subscription = () => callback();
+            ipcRenderer.on('app:flush-request', subscription);
+            return () => ipcRenderer.removeListener('app:flush-request', subscription);
+        },
+        flushDone: () => ipcRenderer.send('app:flush-done'),
 
         // NDI
         notifyNdiAnimation: (isAnimating) => ipcRenderer.send('ndi:animation', isAnimating),

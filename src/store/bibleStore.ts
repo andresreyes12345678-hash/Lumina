@@ -1,24 +1,22 @@
 import { create } from 'zustand';
 import { useStore } from './useStore';
 import { Slide } from '../types';
+import { BIBLE_BOOKS } from '../constants/bible';
 
-// Slug table must match bibleManager.cjs exactly
-const SLUGS = [
-    'genesis','exodo','levitico','numeros','deuteronomio',
-    'josue','jueces','rut','1-samuel','2-samuel',
-    '1-reyes','2-reyes','1-cronicas','2-cronicas','esdras',
-    'nehemias','ester','job','salmos','proverbios',
-    'eclesiastes','cantares','isaias','jeremias','lamentaciones',
-    'ezequiel','daniel','oseas','joel','amos',
-    'abdias','jonas','miqueas','nahum','habacuc',
-    'sofonias','hageo','zacarias','malaquias',
-    'mateo','marcos','lucas','juan','hechos',
-    'romanos','1-corintios','2-corintios','galatas','efesios',
-    'filipenses','colosenses','1-tesalonicenses','2-tesalonicenses','1-timoteo',
-    '2-timoteo','tito','filemon','hebreos','santiago',
-    '1-pedro','2-pedro','1-juan','2-juan','3-juan',
-    'judas','apocalipsis'
-];
+// Deriva los slugs de archivo directamente desde BIBLE_BOOKS
+// evitando la duplicación con bibleManager.cjs
+function getSlugForBook(bookIndex: number): string {
+    const book = BIBLE_BOOKS[bookIndex - 1];
+    if (!book) return `libro${bookIndex}`;
+    const name = book.name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove tildes
+        .replace(/^(\d+)\s+/, '$1-')      // '1 samuel' → '1-samuel'
+        .replace(/\s+/g, '-')             // remaining spaces → hyphens
+        .replace('cantar-de-los-cantares', 'cantares'); // canonical alias
+    return name;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -81,7 +79,7 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
         }
 
         const prefix = bookIndex.toString().padStart(2, '0');
-        const slug   = SLUGS[bookIndex - 1] ?? `libro${bookIndex}`;
+        const slug   = getSlugForBook(bookIndex);
         const attemptedPath = `/biblia/${version}/${prefix}-${slug}.json`;
 
         set({ isLoading: true, error: null, attemptedPath, currentBookData: null, currentBookIndex: bookIndex });

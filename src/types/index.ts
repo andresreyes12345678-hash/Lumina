@@ -19,6 +19,11 @@ export interface Slide {
     fontSize?: number;
     // Persistent video settings
     isLooping?: boolean; // New property for Loop behavior
+    
+    // Global Transition Override
+    transitionType?: 'fade' | 'slide' | 'zoom';
+    transitionSpeed?: number;
+
     // Runtime video control state (optional, for live playback payload)
     videoControl?: {
         isPlaying: boolean;
@@ -136,7 +141,6 @@ export const TYPE_LABELS: Record<SlideType, string> = {
 // Electron API interface
 export interface ElectronAPI {
     triggerSlide: (slide: Slide | null) => void;
-    blackout: () => void;
     onUpdateStage: (callback: (slide: Slide | null) => void) => () => void;
     onUpdatePreview: (callback: (slide: Slide | null) => void) => () => void;
     getFilePath: (file: File) => string;
@@ -158,6 +162,8 @@ export interface ElectronAPI {
     // Data Persistence
     loadData: () => Promise<any>;
     saveData: (data: any) => Promise<{ success: boolean; error?: string }>;
+    onFlushRequest: (callback: () => void) => () => void;
+    flushDone: () => void;
     // Bible Manager
     loadBibleChapter: (params: { 
         version: string; 

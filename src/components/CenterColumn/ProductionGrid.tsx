@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../../store/useStore';
 import SlideCard from './SlideCard';
 import { Slide, SlideType, TYPE_LABELS } from '../../types';
-import { Plus, Upload, Book, Music, RefreshCw, CheckSquare, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Upload, Book, Music, RefreshCw, CheckSquare, Layers, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import SongImportModal from '../Modals/SongImportModal';
 import { useBibleStore } from '../../store/bibleStore';
 
@@ -20,7 +20,8 @@ const ProductionGrid: React.FC = () => {
         setSlideSelection,
         setActiveSlide,
         updateBibleSlides,
-        updateSlide
+        updateSlide,
+        setSettingsOpen
     } = useStore();
 
     const [contextMenuEditScope, setContextMenuEditScope] = useState<'selection' | 'all'>('selection');
@@ -291,29 +292,39 @@ const ProductionGrid: React.FC = () => {
         <div className="h-full flex flex-col">
             {/* Toolbar */}
             <div className="bg-zinc-900 border-b border-gray-700 p-4 flex flex-col gap-2">
-                <div className="flex gap-2">
+                <div className="flex justify-between items-center">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleAddSlide}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                        >
+                            <Plus size={18} />
+                            Nueva Slide
+                        </button>
+                        <button
+                            onClick={handleImportText}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
+                        >
+                            <Upload size={18} />
+                            Importar Texto
+                        </button>
+                        <button
+                            onClick={handleReflowClick}
+                            disabled={!selectedSong}
+                            title={selectedSong ? `Rediseñar "${selectedSong.title}"` : 'Selecciona una canción primero'}
+                            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            <RefreshCw size={18} />
+                            Rediseñar
+                        </button>
+                    </div>
+
                     <button
-                        onClick={handleAddSlide}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                        onClick={() => setSettingsOpen(true)}
+                        className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-md transition-colors"
+                        title="Configuraciones Generales"
                     >
-                        <Plus size={18} />
-                        Nueva Slide
-                    </button>
-                    <button
-                        onClick={handleImportText}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
-                    >
-                        <Upload size={18} />
-                        Importar Texto
-                    </button>
-                    <button
-                        onClick={handleReflowClick}
-                        disabled={!selectedSong}
-                        title={selectedSong ? `Rediseñar "${selectedSong.title}"` : 'Selecciona una canción primero'}
-                        className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        <RefreshCw size={18} />
-                        Rediseñar
+                        <Settings size={20} />
                     </button>
                 </div>
 
@@ -441,7 +452,7 @@ const ProductionGrid: React.FC = () => {
                             return (
                                 <div
                                     key={slide.id}
-                                    draggable={!!selectedSongId} // Enable drag only for songs
+                                    draggable={effectiveTab === 'songs' && !!selectedSongId} // Enable drag only for songs
                                     onDragStart={(e) => handleDragStart(e, index)}
                                     onDragOver={(e) => handleDragOver(e, index)}
                                     onDrop={(e) => handleDrop(e, index)}

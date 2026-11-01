@@ -27,6 +27,15 @@ interface Store {
     isEditing: boolean;
     editingSlideId: string | null;
 
+    // Settings Modal State
+    isSettingsOpen: boolean;
+    setSettingsOpen: (isOpen: boolean) => void;
+
+    // Global Transitions
+    globalTransitionType: 'fade' | 'slide' | 'zoom';
+    globalTransitionSpeed: number;
+    setGlobalTransition: (type: 'fade' | 'slide' | 'zoom', speed: number) => void;
+
     // Grid / Tab State
     activeTab: 'songs' | 'bible' | 'media';
     contentSource: 'songs' | 'bible'; // Tracks what should be shown in Grid
@@ -195,15 +204,43 @@ const sendToStageDisplay = (slide: Slide | null, textVisible: boolean, mediaVisi
         videoControl: {
             ...videoPlaybackState,
             isLooping: videoPlaybackState.isLooping ?? slide.isLooping ?? false // Runtime preference overrides slide, default false
-        }
+        },
+        // Global Transition
+        transitionType: useStore.getState().globalTransitionType,
+        transitionSpeed: useStore.getState().globalTransitionSpeed
     };
 
     window.electronAPI.triggerSlide(payload);
 };
 
-// Persistence helpers
-// Persistence helpers
+// ── Persistence ────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'lumina-data';
+
+// Tiempo de agrupación de escrituras: ráfagas de cambios (reordenar, editar texto, etc.)
+// se guardan UNA sola vez. En un crash se pierde como máximo este margen;
+// al cerrar la app se fuerza el guardado inmediato (ver flush-before-close en main.cjs).
+const SAVE_DEBOUNCE_MS = 1500;
+
+// WHITELIST: únicos campos que se guardan Y se restauran en loadFromStorage().
+// Todo lo transitorio (diapositiva activa, video, selección, modales) queda fuera.
+const PERSISTED_KEYS = [
+    'songs',
+    'songFolders',
+    'mediaFolders',
+    'expandedFolderIds',
+    'bibleState',
+    'songsState',
+    'activeTab',
+    'contentSource',
+    'globalTransitionType',
+    'globalTransitionSpeed'
+] as const;
+
+const pickPersisted = (state: Store) => {
+    const payload: Record<string, unknown> = {};
+    for (const key of PERSISTED_KEYS) payload[key] = state[key];
+    return payload;
+};
 
 // --- Electron Persistence ---
 const loadFromLocalStorage = async () => {
@@ -216,32 +253,68 @@ const loadFromLocalStorage = async () => {
     return data ? JSON.parse(data) : null;
 };
 
-const saveToLocalStorage = (data: any) => {
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let saveDirty = false;
+
+const writeToDisk = async () => {
+    const state = useStore.getState();
+
     // GUARD: Prevent saving if not loaded to avoid wiping DB with initial state
-    if (!data.isLoaded) {
+    if (!state.isLoaded) {
         console.warn('[Store] Save BLOCKED: Store not fully loaded yet.');
         return;
     }
 
-    console.log('[Store] saveToLocalStorage triggered');
-    const { isLoaded, ...payload } = data; // Don't save the internal flag
-
     // STRINGIFY ON FRONTEND to avoid Structured Clone Algorithm blocking
-    let cleanPayloadStr;
+    let cleanPayloadStr: string;
     try {
-        cleanPayloadStr = JSON.stringify(payload, null, 2);
+        cleanPayloadStr = JSON.stringify(pickPersisted(state), null, 2);
     } catch (err) {
         console.error('[Store] CRITICAL: Data format error - Object not serializable:', err);
         return;
     }
 
     if (window.electronAPI?.saveData) {
-        window.electronAPI.saveData(cleanPayloadStr)
-            .then(() => console.log('[Store] Save to Electron acknowledged'))
-            .catch((err: any) => console.error('[Store] Save failed:', err));
+        try {
+            await window.electronAPI.saveData(cleanPayloadStr);
+        } catch (err) {
+            console.error('[Store] Save failed:', err);
+        }
     } else {
         localStorage.setItem(STORAGE_KEY, cleanPayloadStr);
     }
+};
+
+// Escribe de inmediato si hay cambios pendientes (cierre de app, migraciones).
+export const flushSave = async (): Promise<void> => {
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+    }
+    if (!saveDirty) return;
+    saveDirty = false;
+    await writeToDisk();
+};
+
+// Marca cambios pendientes y (re)inicia el debounce. Siempre guarda el estado MÁS RECIENTE.
+const scheduleSave = () => {
+    if (!useStore.getState().isLoaded) {
+        console.warn('[Store] Save BLOCKED: Store not fully loaded yet.');
+        return;
+    }
+    saveDirty = true;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        void flushSave();
+    }, SAVE_DEBOUNCE_MS);
+};
+
+// commit(): aplica un cambio al store y programa su persistencia. Reemplaza el patrón
+// set() + saveToLocalStorage({...state, ...newState}) que se repetía en cada acción CRUD.
+const commit = (change: Partial<Store> | ((state: Store) => Partial<Store>)) => {
+    useStore.setState(change);
+    scheduleSave();
 };
 
 export const useStore = create<Store>((set, get) => ({
@@ -266,6 +339,16 @@ export const useStore = create<Store>((set, get) => ({
     slides: [], // Kept for Bible Mode / Generic Slides
     isEditing: false,
     editingSlideId: null,
+    
+    // Settings state
+    isSettingsOpen: false,
+    setSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
+    
+    // Global Transitions
+    globalTransitionType: 'fade',
+    globalTransitionSpeed: 200,
+    setGlobalTransition: (type, speed) => commit({ globalTransitionType: type, globalTransitionSpeed: speed }),
+    
     textLayerVisible: true,
     mediaLayerVisible: true,
     activeMediaSnapshot: null,
@@ -274,18 +357,13 @@ export const useStore = create<Store>((set, get) => ({
     isProjectionActive: false,
 
     toggleProjection: () => {
-        set((state) => {
-            const newActive = !state.isProjectionActive;
-            const newState = { isProjectionActive: newActive };
-            
-            // Notify Main Process to show or hide the projection window
-            if (window.electronAPI && window.electronAPI.toggleProjection) {
-                window.electronAPI.toggleProjection();
-            }
-            
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        // Estado transitorio (no se persiste): solo actualiza el store y avisa al Main Process
+        set({ isProjectionActive: !get().isProjectionActive });
+
+        // Notify Main Process to show or hide the projection window
+        if (window.electronAPI && window.electronAPI.toggleProjection) {
+            window.electronAPI.toggleProjection();
+        }
     },
     syncStageDisplay: () => {
         const state = get();
@@ -360,46 +438,42 @@ export const useStore = create<Store>((set, get) => ({
     },
 
     setBibleState: (updates) => {
-        set((state) => {
-            // Sanitize: ensure all fields are strings (persisted data may have undefined)
-            const merged = { ...state.bibleState, ...updates };
-            const newBibleState = {
-                version:     merged.version     || 'rvr1960',
-                book:        merged.book        || '',
-                chapter:     merged.chapter     || '',
-                lastVerse:   merged.lastVerse   || '',
-                searchQuery: merged.searchQuery || '',
-                customChapterStyles: merged.customChapterStyles || {},
-            };
-            const newState = { bibleState: newBibleState };
-            
-            // Skip intensive disk IO if the user is typing in the search bar
-            const isOnlySearchQuery = Object.keys(updates).length === 1 && 'searchQuery' in updates;
-            if (!isOnlySearchQuery) {
-                saveToLocalStorage({ ...state, ...newState });
-            }
-            return newState;
-        });
+        // Sanitize: ensure all fields are strings (persisted data may have undefined)
+        const merged = { ...get().bibleState, ...updates };
+        const newBibleState = {
+            version:     merged.version     || 'rvr1960',
+            book:        merged.book        || '',
+            chapter:     merged.chapter     || '',
+            lastVerse:   merged.lastVerse   || '',
+            searchQuery: merged.searchQuery || '',
+            customChapterStyles: merged.customChapterStyles || {},
+        };
+
+        // Skip disk IO if the user is typing in the search bar
+        const isOnlySearchQuery = Object.keys(updates).length === 1 && 'searchQuery' in updates;
+        if (isOnlySearchQuery) {
+            set({ bibleState: newBibleState });
+        } else {
+            commit({ bibleState: newBibleState });
+        }
     },
 
     updateBibleSlides: (updates) => {
-        set((state) => {
+        commit((state) => {
             const newSlides = state.slides.map(s => ({ ...s, ...updates }));
-            
+
             const newBibleState = { ...state.bibleState };
             if (!newBibleState.customChapterStyles) newBibleState.customChapterStyles = {};
-            
+
             const chapterKey = `${state.bibleState.book}-${state.bibleState.chapter}`;
             const currentStyles = newBibleState.customChapterStyles[chapterKey] || {};
-            
+
             newBibleState.customChapterStyles[chapterKey] = {
                 ...currentStyles,
                 ...updates
             };
-            
-            const newState = { slides: newSlides, bibleState: newBibleState };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
+
+            return { slides: newSlides, bibleState: newBibleState };
         });
     },
 
@@ -410,50 +484,37 @@ export const useStore = create<Store>((set, get) => ({
     },
 
     setSongsState: (updates: Partial<Store['songsState']>) => {
-        set((state) => {
-            const newState = { songsState: { ...state.songsState, ...updates } };
-            
-            // Skip intensive disk IO if the user is typing in the search bar
-            const isOnlySearchQuery = Object.keys(updates).length === 1 && 'searchQuery' in updates;
-            if (!isOnlySearchQuery) {
-                saveToLocalStorage({ ...state, ...newState });
-            }
-            return newState;
-        });
+        const newSongsState = { ...get().songsState, ...updates };
+
+        // Skip disk IO if the user is typing in the search bar
+        const isOnlySearchQuery = Object.keys(updates).length === 1 && 'searchQuery' in updates;
+        if (isOnlySearchQuery) {
+            set({ songsState: newSongsState });
+        } else {
+            commit({ songsState: newSongsState });
+        }
     },
 
     // Song management
     addSong: (song) => {
-        set((state) => {
-            const newState = { songs: [...state.songs, song] };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        commit((state) => ({ songs: [...state.songs, song] }));
     },
 
     updateSong: (songId, updates) => {
-        set((state) => {
-            const newState = {
-                songs: state.songs.map(song =>
-                    song.id === songId
-                        ? { ...song, ...updates, updatedAt: Date.now() }
-                        : song
-                )
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        commit((state) => ({
+            songs: state.songs.map(song =>
+                song.id === songId
+                    ? { ...song, ...updates, updatedAt: Date.now() }
+                    : song
+            )
+        }));
     },
 
     deleteSong: (songId) => {
-        set((state) => {
-            const newState = {
-                songs: state.songs.filter(s => s.id !== songId),
-                selectedSongId: state.selectedSongId === songId ? null : state.selectedSongId
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        commit((state) => ({
+            songs: state.songs.filter(s => s.id !== songId),
+            selectedSongId: state.selectedSongId === songId ? null : state.selectedSongId
+        }));
     },
 
     setSelectedSong: (songId) => {
@@ -463,137 +524,100 @@ export const useStore = create<Store>((set, get) => ({
 
     // Song folder management
     addSongFolder: (folder) => {
-        set((state) => {
-            const newState = { songFolders: [...state.songFolders, folder] };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        commit((state) => ({ songFolders: [...state.songFolders, folder] }));
     },
 
     updateSongFolder: (folderId, updates) => {
-        set((state) => {
-            const folder = state.songFolders.find(f => f.id === folderId);
-            if (folder?.isSystemFolder) {
-                console.warn('Cannot rename system folder:', folder.name);
-                return {};
-            }
-            const newState = {
-                songFolders: state.songFolders.map(f =>
-                    f.id === folderId ? { ...f, ...updates } : f
-                )
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        const folder = get().songFolders.find(f => f.id === folderId);
+        if (folder?.isSystemFolder) {
+            console.warn('Cannot rename system folder:', folder.name);
+            return;
+        }
+        commit((state) => ({
+            songFolders: state.songFolders.map(f =>
+                f.id === folderId ? { ...f, ...updates } : f
+            )
+        }));
     },
 
     deleteSongFolder: (folderId) => {
-        set((state) => {
-            const folder = state.songFolders.find(f => f.id === folderId);
-            if (folder?.isSystemFolder) {
-                console.warn('Cannot delete system folder:', folder.name);
-                return {};
-            }
-            const newState = {
-                songFolders: state.songFolders.filter(f => f.id !== folderId),
-                // Move songs to General folder
-                songs: state.songs.map(s => s.folderId === folderId ? { ...s, folderId: 'general-songs' } : s)
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        const folder = get().songFolders.find(f => f.id === folderId);
+        if (folder?.isSystemFolder) {
+            console.warn('Cannot delete system folder:', folder.name);
+            return;
+        }
+        commit((state) => ({
+            songFolders: state.songFolders.filter(f => f.id !== folderId),
+            // Move songs to General folder
+            songs: state.songs.map(s => s.folderId === folderId ? { ...s, folderId: 'general-songs' } : s)
+        }));
     },
 
     // Media management
+    // NOTA: mediaFiles NO se persiste en lumina_db.json (se purga en loadFromStorage);
+    // la persistencia real vive en media-db.json (mediaManager.cjs). Por eso usan set(), no commit().
     addMediaFile: (file) => {
-        set((state) => {
-            const newState = { mediaFiles: [...state.mediaFiles, file] };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        set((state) => ({ mediaFiles: [...state.mediaFiles, file] }));
     },
 
     updateMediaFile: (fileId, updates) => {
-        set((state) => {
-            const newState = {
-                mediaFiles: state.mediaFiles.map(f =>
-                    f.id === fileId ? { ...f, ...updates } : f
-                )
-            };
-            saveToLocalStorage({ ...state, ...newState });
+        set((state) => ({
+            mediaFiles: state.mediaFiles.map(f =>
+                f.id === fileId ? { ...f, ...updates } : f
+            )
+        }));
 
-            // PERSISTENCE: Save to JSON DB via Electron
-            if (window.electronAPI && window.electronAPI.updateMedia) {
-                window.electronAPI.updateMedia(fileId, updates).catch(err =>
-                    console.error('[Store] Failed to persist media update:', err)
-                );
-            }
-
-            return newState;
-        });
+        // PERSISTENCE: Save to JSON DB via Electron
+        if (window.electronAPI && window.electronAPI.updateMedia) {
+            window.electronAPI.updateMedia(fileId, updates).catch(err =>
+                console.error('[Store] Failed to persist media update:', err)
+            );
+        }
     },
 
     deleteMediaFile: (fileId) => {
-        set((state) => {
-            const newState = { mediaFiles: state.mediaFiles.filter(f => f.id !== fileId) };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        set((state) => ({ mediaFiles: state.mediaFiles.filter(f => f.id !== fileId) }));
     },
 
     addMediaFolder: (folder) => {
-        set((state) => {
-            const newState = { mediaFolders: [...state.mediaFolders, folder] };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        commit((state) => ({ mediaFolders: [...state.mediaFolders, folder] }));
     },
 
     updateMediaFolder: (folderId, updates) => {
-        set((state) => {
-            const folder = state.mediaFolders.find(f => f.id === folderId);
-            if (folder?.isSystemFolder) {
-                console.warn('Cannot rename system folder:', folder.name);
-                return {};
-            }
-            const newState = {
-                mediaFolders: state.mediaFolders.map(f =>
-                    f.id === folderId ? { ...f, ...updates } : f
-                )
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        const folder = get().mediaFolders.find(f => f.id === folderId);
+        if (folder?.isSystemFolder) {
+            console.warn('Cannot rename system folder:', folder.name);
+            return;
+        }
+        commit((state) => ({
+            mediaFolders: state.mediaFolders.map(f =>
+                f.id === folderId ? { ...f, ...updates } : f
+            )
+        }));
     },
 
     deleteMediaFolder: (folderId) => {
-        set((state) => {
-            const folder = state.mediaFolders.find(f => f.id === folderId);
-            if (folder?.isSystemFolder) {
-                console.warn('Cannot delete system folder:', folder.name);
-                return {};
-            }
-            const newState = {
-                mediaFolders: state.mediaFolders.filter(f => f.id !== folderId),
-                mediaFiles: state.mediaFiles.map(f =>
-                    f.folderId === folderId ? { ...f, folderId: 'general-media' } : f
-                )
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+        const folder = get().mediaFolders.find(f => f.id === folderId);
+        if (folder?.isSystemFolder) {
+            console.warn('Cannot delete system folder:', folder.name);
+            return;
+        }
+        commit((state) => ({
+            mediaFolders: state.mediaFolders.filter(f => f.id !== folderId),
+            mediaFiles: state.mediaFiles.map(f =>
+                f.folderId === folderId ? { ...f, folderId: 'general-media' } : f
+            )
+        }));
     },
 
     toggleFolderExpansion: (folderId) => {
-        set((state) => {
+        commit((state) => {
             const current = state.expandedFolderIds || [];
-            const updated = current.includes(folderId)
-                ? current.filter((id) => id !== folderId)
-                : [...current, folderId];
-
-            // Persist immediately as it's a UI preference
-            saveToLocalStorage({ ...state, expandedFolderIds: updated });
-            return { expandedFolderIds: updated };
+            return {
+                expandedFolderIds: current.includes(folderId)
+                    ? current.filter((id) => id !== folderId)
+                    : [...current, folderId]
+            };
         });
     },
 
@@ -719,8 +743,7 @@ export const useStore = create<Store>((set, get) => ({
         const newSongs = [...songs];
         newSongs[songIndex] = { ...song, slides: newSlides, updatedAt: Date.now() };
 
-        set({ songs: newSongs });
-        saveToLocalStorage({ ...get(), songs: newSongs });
+        commit({ songs: newSongs });
     },
 
     deleteSlide: (id) => {
@@ -772,57 +795,42 @@ export const useStore = create<Store>((set, get) => ({
         get().updateSong(songId, { slides });
     },
 
+    // Navegación unificada: lógica compartida por nextSlide() y previousSlide()
+    // Antes era código espejo duplicado en ambas funciones
     nextSlide: () => {
         const { activeTab, slides, songs, selectedSongId, activeSlideIndex, contentSource } = get();
-
-        // Determine effective mode (Bible vs Songs)
-        // If we are in Media tab, we rely on contentSource to know what's under the hood
         const effectiveMode = (activeTab === 'media') ? contentSource : activeTab;
 
-        // Mode 1: BIBLE
         if (effectiveMode === 'bible') {
             if (slides.length === 0) return;
             const nextIndex = activeSlideIndex < slides.length - 1 ? activeSlideIndex + 1 : activeSlideIndex;
-            const nextSlide = slides[nextIndex];
-            get().setActiveSlide(nextSlide, nextIndex);
+            get().setActiveSlide(slides[nextIndex], nextIndex);
             return;
         }
 
-        // Mode 2: SONGS
         if (!selectedSongId) return;
         const currentSlides = songs.find(s => s.id === selectedSongId)?.slides || [];
         if (currentSlides.length === 0) return;
-
         const nextIndex = activeSlideIndex < currentSlides.length - 1 ? activeSlideIndex + 1 : activeSlideIndex;
-        const nextSlide = currentSlides[nextIndex];
-
-        get().setActiveSlide(nextSlide, nextIndex);
+        get().setActiveSlide(currentSlides[nextIndex], nextIndex);
     },
 
     previousSlide: () => {
         const { activeTab, slides, songs, selectedSongId, activeSlideIndex, contentSource } = get();
-
-        // Determine effective mode
         const effectiveMode = (activeTab === 'media') ? contentSource : activeTab;
 
-        // Mode 1: BIBLE
         if (effectiveMode === 'bible') {
             if (slides.length === 0) return;
             const prevIndex = activeSlideIndex > 0 ? activeSlideIndex - 1 : 0;
-            const prevSlide = slides[prevIndex];
-            get().setActiveSlide(prevSlide, prevIndex);
+            get().setActiveSlide(slides[prevIndex], prevIndex);
             return;
         }
 
-        // Mode 2: SONGS
         if (!selectedSongId) return;
         const currentSlides = songs.find(s => s.id === selectedSongId)?.slides || [];
         if (currentSlides.length === 0) return;
-
         const prevIndex = activeSlideIndex > 0 ? activeSlideIndex - 1 : 0;
-        const prevSlide = currentSlides[prevIndex];
-
-        get().setActiveSlide(prevSlide, prevIndex);
+        get().setActiveSlide(currentSlides[prevIndex], prevIndex);
     },
 
     startEditing: (slideId) => {
@@ -846,11 +854,11 @@ export const useStore = create<Store>((set, get) => ({
         sendToStageDisplay(activeSlide, textLayerVisible, false);
     },
 
+    // Blackout unificado: oculta ambas capas y reutiliza sendToStageDisplay (mismo canal 'trigger-slide').
+    // La diapositiva activa se conserva para poder volver con showAllLayers().
     blackout: () => {
         set({ textLayerVisible: false, mediaLayerVisible: false });
-        if (window.electronAPI) {
-            window.electronAPI.blackout();
-        }
+        sendToStageDisplay(null, false, false);
     },
 
     showAllLayers: () => {
@@ -954,6 +962,15 @@ export const useStore = create<Store>((set, get) => ({
             console.log('[Store] Enforcing Media File Purge on Load');
             const mediaFiles: any[] = [];
 
+            // Restaurar transiciones globales (validando valores para tolerar datos antiguos/corruptos)
+            const validTransitions = ['fade', 'slide', 'zoom'] as const;
+            const globalTransitionType = validTransitions.includes(data.globalTransitionType)
+                ? data.globalTransitionType
+                : currentState.globalTransitionType;
+            const globalTransitionSpeed = typeof data.globalTransitionSpeed === 'number' && data.globalTransitionSpeed >= 0
+                ? data.globalTransitionSpeed
+                : currentState.globalTransitionSpeed;
+
             set({
                 isLoaded: true, // MARK ENABLED
                 songs: data.songs || [],
@@ -966,20 +983,17 @@ export const useStore = create<Store>((set, get) => ({
                 songsState: data.songsState || currentState.songsState,
                 activeTab: data.activeTab || 'songs',
                 contentSource: data.contentSource || 'songs',
+                globalTransitionType,
+                globalTransitionSpeed,
                 // FORCE RESET: Prevent ghost state on button
                 activeMediaSnapshot: null,
                 mediaLayerVisible: false
             });
             console.log('[Store] Store successfully hydrated and unlocked.');
 
-            // Save migration immediately
-            saveToLocalStorage({
-                ...data,
-                mediaFolders,
-                songFolders,
-                mediaFiles: [],
-                isLoaded: true
-            });
+            // Save migration immediately (también normaliza el archivo a la whitelist)
+            scheduleSave();
+            void flushSave();
         } else {
             console.log('[Store] No data found (or load failed). Initializing defaults and unlocking.');
             set({ isLoaded: true });
@@ -988,20 +1002,23 @@ export const useStore = create<Store>((set, get) => ({
 
     resetData: () => {
         localStorage.removeItem(STORAGE_KEY);
-        set({
+        commit({
             songs: [],
             selectedSongId: null,
             songFolders: [
+                { id: 'general-songs', name: 'General', isSystemFolder: true },
                 { id: 'folder-1', name: 'Alabanza' },
                 { id: 'folder-2', name: 'Adoración' }
             ],
             mediaFiles: [],
             mediaFolders: [
-                { id: 'default', name: 'Sin carpeta' },
+                { id: 'general-media', name: 'General', isSystemFolder: true },
                 { id: 'folder-1', name: 'Fondos de Alabanza' },
                 { id: 'folder-2', name: 'Fondos de Adoración' }
             ],
-            activeMediaSnapshot: null
+            activeMediaSnapshot: null,
+            activeSlide: null,
+            activeSlideIndex: -1,
         });
         console.log('App data reset complete');
     },
@@ -1014,39 +1031,36 @@ export const useStore = create<Store>((set, get) => ({
     // ... (rest of initial state)
 
     setActiveTab: (tab) => {
-        set((state) => {
+        commit((state) => ({
+            activeTab: tab,
             // Update contentSource only if tab is 'songs' or 'bible'
-            const newContentSource = (tab === 'songs' || tab === 'bible')
-                ? tab
-                : state.contentSource;
-
-            const newState = {
-                activeTab: tab,
-                contentSource: newContentSource
-            };
-            saveToLocalStorage({ ...state, ...newState });
-            return newState;
-        });
+            contentSource: (tab === 'songs' || tab === 'bible') ? tab : state.contentSource,
+            // Limpiar la selección de slides al cambiar de pestaña para evitar que se mezclen
+            selectedSlideIds: [],
+            editingSlideId: null
+        }));
     },
 
+    // Guardado inmediato (omite el debounce). Persiste solo la whitelist PERSISTED_KEYS.
     saveToStorage: () => {
-        const state = get();
-        saveToLocalStorage({
-            songs: state.songs,
-            songFolders: state.songFolders,
-            // mediaFiles is excluded - managed by MediaManager (media-db.json)
-            mediaFolders: state.mediaFolders,
-            bibleState: state.bibleState,
-            songsState: state.songsState,
-            activeTab: state.activeTab,
-            contentSource: state.contentSource,
-            // Persistent background snapshot
-            activeMediaSnapshot: state.activeMediaSnapshot
-        });
+        scheduleSave();
+        void flushSave();
     }
 }));
 
 // Auto-load on initialization
 if (typeof window !== 'undefined') {
     useStore.getState().loadFromStorage().catch(console.error);
+
+    // FLUSH BEFORE CLOSE: main.cjs pide guardar al cerrar la ventana de control;
+    // escribimos los cambios pendientes (debounce) y confirmamos para que pueda cerrar.
+    window.electronAPI?.onFlushRequest?.(async () => {
+        try {
+            await flushSave();
+        } catch (err) {
+            console.error('[Store] Flush before close failed:', err);
+        } finally {
+            window.electronAPI?.flushDone?.();
+        }
+    });
 }

@@ -2,20 +2,21 @@
 const { BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
-let ndiSender = null;
+let ndiSource = null;
 let ndiWindow = null;
 let isNdiInstalled = false;
 let isNdiActive = false;
-let captureInterval = null;
+let frameSubscription = null;
 
 // Try to load NDI library gracefully
 try {
-    const ndi = require('@julusian/ndi');
+    // Act as a fallback in case the native C++ library is not compiled or missing.
+    const { NdiSource } = require('@lwon/node-ndi');
     isNdiInstalled = true;
-    console.log('[NDI] @julusian/ndi library found and loaded successfully.');
+    console.log('[NDI] @lwon/node-ndi library found and loaded successfully.');
 } catch (err) {
-    console.warn('[NDI] NDI Library not found or failed to load. NDI features will be disabled gracefully.');
-    console.warn('      If you wish to use NDI, please ensure native dependencies are installed.');
+    console.warn('[NDI] @lwon/node-ndi library not found or failed to load. NDI features will be disabled gracefully.');
+    console.warn('      If you wish to use NDI, please run "npm run rebuild" to compile the native module.');
 }
 
 function initialize(mainWindow, isDev) {
@@ -41,29 +42,12 @@ function initialize(mainWindow, isDev) {
     });
 
     ipcMain.on('ndi:animation', (event, isAnimating) => {
-        if (!isNdiActive || !ndiWindow || !ndiSender) return;
-
-        if (isAnimating) {
-            // Start high-frequency capture during transition
-            if (!captureInterval) {
-                captureInterval = setInterval(() => captureAndSendFrame(), 1000 / 30); // 30 FPS
-            }
-        } else {
-            // Stop high-frequency capture, capture one final static frame
-            if (captureInterval) {
-                clearInterval(captureInterval);
-                captureInterval = null;
-            }
-            setTimeout(() => captureAndSendFrame(), 500); // one last clear frame
-        }
+        // Not used extensively now since offscreen paint/frame subscription
+        // automatically captures frames at 30/60 FPS only when updates occur.
     });
 
-    // We can also trigger a capture immediately when a new slide arrives 
-    // to ensure the static text updates if no animation was triggered.
     ipcMain.on('trigger-slide', () => {
-        if (isNdiActive && !captureInterval) {
-            setTimeout(() => captureAndSendFrame(), 50);
-        }
+        // Handled automatically by the window rendering and triggering paint events.
     });
 }
 
@@ -71,23 +55,25 @@ function startNdi(isDev) {
     if (!isNdiInstalled) return;
 
     try {
-        const ndi = require('@julusian/ndi');
-        ndiSender = new ndi.Sender({
-            name: 'LUMINA LYRICS',
-            colorFormat: ndi.NDIlib_FourCC_video_type_RGBA
-        });
-        console.log('[NDI] NDI Sender created: LUMINA LYRICS');
+        const { NdiSource } = require('@lwon/node-ndi');
+        
+        // Initialize the NDI Source stream.
+        ndiSource = new NdiSource("Lumina - Letras");
+        console.log('[NDI] NdiSource created: Lumina - Letras');
 
         createNdiWindow(isDev);
     } catch (err) {
-        console.error('[NDI] Failed to start NDI Sender:', err);
+        console.error('[NDI] Failed to start NDI Source:', err);
     }
 }
 
 function stopNdi() {
-    if (captureInterval) {
-        clearInterval(captureInterval);
-        captureInterval = null;
+    // Clean up frame subscription if any
+    if (frameSubscription) {
+        try {
+            frameSubscription.unsubscribe();
+        } catch (e) {}
+        frameSubscription = null;
     }
 
     if (ndiWindow && !ndiWindow.isDestroyed()) {
@@ -95,13 +81,17 @@ function stopNdi() {
         ndiWindow = null;
     }
 
-    if (ndiSender) {
-        // Assume close or destroy method
+    if (ndiSource) {
         try {
-            if (typeof ndiSender.destroy === 'function') ndiSender.destroy();
-            else if (typeof ndiSender.close === 'function') ndiSender.close();
-        } catch (e) { }
-        ndiSender = null;
+            if (typeof ndiSource.destroy === 'function') {
+                ndiSource.destroy();
+            } else if (typeof ndiSource.close === 'function') {
+                ndiSource.close();
+            }
+        } catch (e) {
+            console.warn('[NDI] Error destroying NdiSource:', e.message);
+        }
+        ndiSource = null;
     }
     console.log('[NDI] NDI Output stopped.');
 }
@@ -109,18 +99,20 @@ function stopNdi() {
 function createNdiWindow(isDev) {
     if (ndiWindow) return;
 
+    // Create a dedicated offscreen window to capture frames without cluttering the screen.
     ndiWindow = new BrowserWindow({
         width: 1920,
         height: 1080,
-        show: false, // Hidden window
+        show: false, // Keep invisible
         frame: false,
         transparent: true,
-        backgroundColor: '#00000000', // fully transparent
+        backgroundColor: '#00000000', // transparent alpha channel background
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
-            offscreen: true // Critical for rendering without a visible window
+            offscreen: true, // Render to GPU/CPU memory buffers directly
+            backgroundThrottling: false // Keep full rendering performance when hidden
         }
     });
 
@@ -130,52 +122,41 @@ function createNdiWindow(isDev) {
         ndiWindow.loadFile(path.join(__dirname, '../dist/ndi.html'));
     }
 
-    // Force offscreen paint updates (though capturePage takes from GPU buffer)
+    // Set stable frame rate (30 FPS as base, can be 60 if needed)
+    ndiWindow.webContents.setFrameRate(30);
+
+    // Capture using standard Offscreen Rendering paint events
     ndiWindow.webContents.on('paint', (event, dirty, image) => {
-        // We could send frames here ideally! But let's stick to our polled/triggered manual capturePage to save CPU, 
-        // OR we can just use the paint event since offscreen provides the NativeImage directly!
-        // Using 'paint' is actually WAY more efficient than setInterval + capturePage.
-        
-        if (isNdiActive && ndiSender) {
-             const buffer = image.getBitmap(); // Returns raw BGRA or RGBA
-             try {
-                // @julusian/ndi uses send({ videoStatus, videoData, audioStatus, audioData ... })
-                ndiSender.send({
-                    video: {
-                        xres: 1920,
-                        yres: 1080,
-                        pictureAspectRatio: 1920 / 1080,
-                        timestamp: 0,
-                        data: buffer
-                    }
-                });
-             } catch(e) {}
+        if (isNdiActive && ndiSource) {
+            try {
+                // image is a NativeImage. getBitmap() returns raw pixel data (BGRA or RGBA).
+                const buffer = image.getBitmap();
+                ndiSource.sendFrame(buffer);
+            } catch (err) {
+                // Suppress send errors to avoid logging spam during rapid updates
+            }
         }
     });
-    
-    ndiWindow.webContents.setFrameRate(30);
+
+    // Alternatively, subscribe to frame updates using beginFrameSubscription as a fallback or secondary method
+    // webContents.beginFrameSubscription is highly efficient as it gets GPU updates directly.
+    try {
+        ndiWindow.webContents.beginFrameSubscription((image) => {
+            if (isNdiActive && ndiSource) {
+                try {
+                    const buffer = image.getBitmap();
+                    ndiSource.sendFrame(buffer);
+                } catch (err) {
+                    // Suppress
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('[NDI] beginFrameSubscription not supported or failed to initialize:', e.message);
+    }
 
     ndiWindow.on('closed', () => {
         ndiWindow = null;
-    });
-}
-
-function captureAndSendFrame() {
-    if (!ndiWindow || !ndiWindow.isDestroyed() === false || !ndiSender) return;
-    
-    ndiWindow.webContents.capturePage().then((image) => {
-         const buffer = image.getBitmap(); // BGRA/RGBA raw
-         try {
-             ndiSender.send({
-                 video: {
-                     xres: 1920,
-                     yres: 1080,
-                     data: buffer
-                 }
-             });
-         } catch(e) {}
-    }).catch(err => {
-        // Ignore capture errors
     });
 }
 

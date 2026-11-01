@@ -3,7 +3,6 @@ import { useStore } from '../../store/useStore';
 import { Settings, CheckSquare, Layers } from 'lucide-react';
 
 import VideoControls from './VideoControls';
-import NdiToggle from './NdiToggle';
 
 const FONT_FAMILIES = [
     'Open Sans',
@@ -25,7 +24,10 @@ const PropertiesPanel: React.FC = () => {
         selectedSongId,
         songs,
         updateSong,
-        slides: directSlides
+        slides: directSlides,
+        globalTransitionType,
+        globalTransitionSpeed,
+        setGlobalTransition
     } = useStore();
 
     // START: Local State for Responsive UI
@@ -255,9 +257,38 @@ const PropertiesPanel: React.FC = () => {
                         </div>
                     </div>
                 )}
+                
+                {/* Global Transitions Section */}
+                <div className="pt-4 mt-2 border-t border-gray-700">
+                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Transición Global</h3>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Tipo de Animación</label>
+                            <select
+                                value={globalTransitionType}
+                                onChange={(e) => setGlobalTransition(e.target.value as any, globalTransitionSpeed)}
+                                className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-md text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option value="fade">Desvanecer (Por defecto)</option>
+                                <option value="slide">Deslizar Arriba</option>
+                                <option value="zoom">Acercar (Zoom)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Velocidad</label>
+                            <select
+                                value={globalTransitionSpeed}
+                                onChange={(e) => setGlobalTransition(globalTransitionType, parseInt(e.target.value))}
+                                className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-md text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option value={150}>Rápida (150ms)</option>
+                                <option value={300}>Normal (300ms)</option>
+                                <option value={600}>Suave (600ms)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <NdiToggle />
         </div>
     );
 };

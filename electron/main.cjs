@@ -162,6 +162,33 @@ function createControlWindow() {
         controlWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }
 
+    // FLUSH BEFORE CLOSE: el guardado del renderer usa debounce (1.5s). Antes de cerrar
+    // pedimos al renderer que escriba de inmediato y esperamos su confirmación
+    // (con timeout de seguridad de 2s para que la ventana nunca quede trabada).
+    let flushedBeforeClose = false;
+    controlWindow.on('close', (event) => {
+        if (flushedBeforeClose) return;
+        event.preventDefault();
+        flushedBeforeClose = true;
+
+        let done = false;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(safetyTimer);
+            ipcMain.removeListener('app:flush-done', finish);
+            if (controlWindow && !controlWindow.isDestroyed()) controlWindow.close();
+        };
+        const safetyTimer = setTimeout(finish, 2000);
+        ipcMain.once('app:flush-done', finish);
+
+        try {
+            controlWindow.webContents.send('app:flush-request');
+        } catch (e) {
+            finish();
+        }
+    });
+
     controlWindow.on('closed', () => {
         console.log('[Main] controlWindow closed');
         clearTimeout(fallbackTimeout);
@@ -381,15 +408,7 @@ ipcMain.on('video-ended', () => {
     }
 });
 
-// 4. Blackout / Global Clear
-ipcMain.on('blackout', () => {
-    if (stageWindow && !stageWindow.isDestroyed()) {
-        stageWindow.webContents.send('update-stage', null);
-    }
-    if (controlWindow && !controlWindow.isDestroyed()) {
-        controlWindow.webContents.send('update-preview', null);
-    }
-});
+// 4. Blackout / Global Clear: unificado en 'trigger-slide' (el store envía un payload 'blackout').
 
 // 5. Toggle Projection Window
 ipcMain.on('toggle-projection', () => {

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Search, Book as BookIcon, Loader2, AlertCircle, X } from 'lucide-react';
+import { Search, Book as BookIcon, Loader2, AlertCircle, X, ChevronDown } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { BIBLE_BOOKS, VERSIONS } from '../../constants/bible';
+import { BIBLE_BOOKS, VERSIONS, type BibleBook } from '../../constants/bible';
 import { useBibleStore } from '../../store/bibleStore';
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -24,11 +24,16 @@ const BiblePanel: React.FC = () => {
         searchVerses, clearSearch,
         searchResults,
         isLoading, error, attemptedPath,
-        currentBookData,
+        currentBookData, currentBookIndex,
     } = useBibleStore();
 
     // ── Local search query (not persisted globally — it's transient) ───────────
     const [searchQuery, setSearchQuery] = React.useState('');
+
+    // ── Acordeón de libros: solo un libro tiene su cuadrícula de capítulos desplegada ──
+    const [expandedBook, setExpandedBook] = React.useState<string | null>(safeBook || null);
+    const listRef  = React.useRef<HTMLDivElement>(null);
+    const bookRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
     // Accent-insensitive, case-insensitive normalize — safe with undefined
     const normalize = (s: string | null | undefined): string => {
@@ -36,17 +41,7 @@ const BiblePanel: React.FC = () => {
         return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     };
 
-    // Chapter count: prefer live data, fall back to static constant
-    const chaptersCount = currentBookData?.chapters?.length
-        ?? BIBLE_BOOKS.find(b => b.name === safeBook)?.chapters
-        ?? 0;
-    const chaptersList = chaptersCount > 0
-        ? (currentBookData?.chapters?.map(c => c.number)
-            ?? Array.from({ length: chaptersCount }, (_, i) => i + 1))
-        : [];
-
     const showSearch     = searchQuery.length >= 3;
-    const isBookLoaded   = currentBookData !== null;
     const [isSearching, setIsSearching] = React.useState(false);
 
     // Books list filtered: only active when NOT in global search mode
@@ -91,12 +86,54 @@ const BiblePanel: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // ── Sincroniza el acordeón cuando el libro activo cambia desde fuera ───────
+    // (restauración al iniciar, clic en un resultado de búsqueda, etc.)
+    React.useEffect(() => {
+        if (selectedBook) setExpandedBook(selectedBook);
+    }, [selectedBook]);
+
+    // ── Mantiene visible el libro desplegado ───────────────────────────────────
+    // Al desplegar un libro se compacta el anterior y el contenido se desplaza;
+    // aquí se reubica el scroll para que el libro y su cuadrícula queden a la vista.
+    React.useEffect(() => {
+        if (!expandedBook || showSearch) return;
+        const frame = requestAnimationFrame(() => {
+            const container = listRef.current;
+            const el = bookRefs.current[expandedBook];
+            if (!container || !el) return;
+
+            const cRect = container.getBoundingClientRect();
+            const eRect = el.getBoundingClientRect();
+            const top = eRect.top - cRect.top + container.scrollTop;
+
+            if (eRect.top < cRect.top || eRect.height > container.clientHeight) {
+                container.scrollTo({ top: top - 4, behavior: 'smooth' });
+            } else if (eRect.bottom > cRect.bottom) {
+                container.scrollTo({ top: top + eRect.height - container.clientHeight + 4, behavior: 'smooth' });
+            }
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [expandedBook, filteredBooks, showSearch]);
+
     // ── Handlers ───────────────────────────────────────────────────────────────
 
-    const handleSelectBook = (bookName: string, bookIndex: number) => {
-        clearSearch();
-        setSearchQuery('');
-        loadBook(bookName, bookIndex, safeVersion, 1);
+    // Clic en un libro: despliega su cuadrícula y compacta la del libro anterior.
+    // Clic sobre el libro ya desplegado: lo compacta.
+    const handleToggleBook = (bookName: string) => {
+        setExpandedBook(prev => (prev === bookName ? null : bookName));
+    };
+
+    // Clic en un capítulo: carga ese capítulo. La cuadrícula permanece desplegada.
+    const handleSelectChapter = (book: BibleBook, chapter: number) => {
+        if (searchQuery) {
+            setSearchQuery('');
+            clearSearch();
+        }
+        if (currentBookIndex === book.index && currentBookData) {
+            loadChapter(chapter); // Libro ya en memoria: cambio instantáneo
+        } else {
+            loadBook(book.name, book.index, safeVersion, chapter);
+        }
     };
 
     const handleVersionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -105,17 +142,6 @@ const BiblePanel: React.FC = () => {
         if (safeBook) {
             const bookData = BIBLE_BOOKS.find(b => b.name === safeBook);
             if (bookData) loadBook(safeBook, bookData.index, v, parseInt(safeChapter) || 1);
-        }
-    };
-
-    const handleChapterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const ch = parseInt(e.target.value);
-        if (!ch) return;
-        if (isBookLoaded) {
-            loadChapter(ch);
-        } else if (safeBook) {
-            const bookData = BIBLE_BOOKS.find(b => b.name === safeBook);
-            if (bookData) loadBook(safeBook, bookData.index, safeVersion, ch);
         }
     };
 
@@ -170,59 +196,18 @@ const BiblePanel: React.FC = () => {
                 <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">Biblia</h3>
             </div>
 
-            {/* ── Selectors ──────────────────────────────────────────────── */}
-            <div className="flex flex-col gap-2">
-
-                {/* Version + Chapter */}
-                <div className="grid grid-cols-2 gap-2">
-                    <div>
-                        <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">Versión</label>
-                        <select
-                            value={safeVersion}
-                            onChange={handleVersionChange}
-                            className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-100 focus:ring-1 focus:ring-blue-500"
-                        >
-                            {VERSIONS.map(v => (
-                                <option key={v.folder} value={v.folder}>{v.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">
-                            Capítulo {chaptersCount > 0 && <span className="text-gray-600 normal-case">({chaptersCount})</span>}
-                        </label>
-                        <select
-                            value={selectedChapter}
-                            onChange={handleChapterChange}
-                            disabled={!selectedBook || isLoading}
-                            className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-100 focus:ring-1 focus:ring-blue-500 disabled:opacity-30"
-                        >
-                            <option value="">Cap.</option>
-                            {chaptersList.map(ch => (
-                                <option key={ch} value={ch}>{ch}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                {/* Book dropdown */}
-                <div>
-                    <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">Libro</label>
-                    <select
-                        value={selectedBook}
-                        onChange={e => {
-                            const book = BIBLE_BOOKS.find(b => b.name === e.target.value);
-                            if (book) handleSelectBook(book.name, book.index);
-                        }}
-                        className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    >
-                        <option value="">— Selecciona un libro —</option>
-                        {BIBLE_BOOKS.map(b => (
-                            <option key={b.index} value={b.name}>{b.name}</option>
-                        ))}
-                    </select>
-                </div>
+            {/* ── Version ────────────────────────────────────────────────── */}
+            <div>
+                <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">Versión</label>
+                <select
+                    value={safeVersion}
+                    onChange={handleVersionChange}
+                    className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-100 focus:ring-1 focus:ring-blue-500"
+                >
+                    {VERSIONS.map(v => (
+                        <option key={v.folder} value={v.folder}>{v.label}</option>
+                    ))}
+                </select>
             </div>
 
             {/* ── Search ─────────────────────────────────────────────────── */}
@@ -262,16 +247,9 @@ const BiblePanel: React.FC = () => {
             )}
 
             {/* ── Main list ──────────────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
 
-                {/* Book-load spinner - only when actually loading a book, not during search */}
-                {isLoading && !showSearch ? (
-                    <div className="flex items-center justify-center gap-2 h-20 text-gray-500">
-                        <Loader2 size={16} className="animate-spin text-blue-400" />
-                        <span className="text-xs">Cargando…</span>
-                    </div>
-
-                ) : showSearch ? (
+                {showSearch ? (
                     /* ── Search results ───────────────────────────────────── */
                     <div className="space-y-1.5">
                         <p className="text-[9px] text-gray-500 uppercase font-bold px-1 mb-2 flex items-center gap-1.5">
@@ -326,26 +304,73 @@ const BiblePanel: React.FC = () => {
                     </div>
 
                 ) : (
-                    /* ── Book list ────────────────────────────────────────── */
+                    /* ── Book list (acordeón con cuadrícula de capítulos) ── */
                     <div className="space-y-px">
-                        {filteredBooks.map(book => (
-                            <button
-                                key={book.index}
-                                onClick={() => handleSelectBook(book.name, book.index)}
-                                className={`w-full flex items-center justify-between px-3 py-2 rounded text-left transition-all duration-100 ${
-                                    selectedBook === book.name
-                                        ? 'bg-blue-600 text-white'
-                                        : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'
-                                }`}
-                            >
-                                <span className="text-[12px] font-medium truncate">{book.name}</span>
-                                <span className={`text-[9px] flex-shrink-0 ml-2 tabular-nums ${
-                                    selectedBook === book.name ? 'text-blue-200' : 'text-gray-600'
-                                }`}>
-                                    {book.chapters}
-                                </span>
-                            </button>
-                        ))}
+                        {filteredBooks.map(book => {
+                            const isExpanded    = expandedBook === book.name;
+                            const isActiveBook  = selectedBook === book.name;
+                            const isBookLoading = isLoading && currentBookIndex === book.index;
+
+                            return (
+                                <div
+                                    key={book.index}
+                                    ref={el => { bookRefs.current[book.name] = el; }}
+                                >
+                                    {/* Book row */}
+                                    <button
+                                        onClick={() => handleToggleBook(book.name)}
+                                        aria-expanded={isExpanded}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded text-left transition-colors duration-100 hover:bg-gray-800 ${
+                                            isActiveBook
+                                                ? 'text-blue-400'
+                                                : isExpanded
+                                                    ? 'text-white'
+                                                    : 'text-gray-400 hover:text-gray-100'
+                                        }`}
+                                    >
+                                        <span className={`text-[12px] truncate ${isActiveBook || isExpanded ? 'font-semibold' : 'font-medium'}`}>
+                                            {book.name}
+                                        </span>
+                                        <span className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                            {isBookLoading ? (
+                                                <Loader2 size={11} className="animate-spin text-blue-400" />
+                                            ) : (
+                                                <span className={`text-[9px] tabular-nums ${isActiveBook ? 'text-blue-300' : 'text-gray-600'}`}>
+                                                    {book.chapters}
+                                                </span>
+                                            )}
+                                            <ChevronDown
+                                                size={12}
+                                                className={`transition-transform duration-150 ${isExpanded ? 'rotate-180 text-gray-300' : 'text-gray-600'}`}
+                                            />
+                                        </span>
+                                    </button>
+
+                                    {/* Chapter grid */}
+                                    {isExpanded && (
+                                        <div className="grid grid-cols-5 gap-1.5 px-1 pt-1 pb-3">
+                                            {Array.from({ length: book.chapters }, (_, i) => i + 1).map(ch => {
+                                                const isSelected = isActiveBook && selectedChapter === String(ch);
+                                                return (
+                                                    <button
+                                                        key={ch}
+                                                        onClick={() => handleSelectChapter(book, ch)}
+                                                        title={`${book.name} ${ch}`}
+                                                        className={`h-8 rounded text-[11px] font-semibold tabular-nums transition-colors duration-100 ${
+                                                            isSelected
+                                                                ? 'bg-blue-600 text-white shadow-[0_0_8px_rgba(37,99,235,0.45)]'
+                                                                : 'bg-gray-800 border border-gray-700/60 text-gray-300 hover:bg-gray-700 hover:text-white'
+                                                        }`}
+                                                    >
+                                                        {ch}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
